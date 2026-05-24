@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WA_SYSTEM · Automação</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.2.0/tabler-icons.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Base */
+      --bg:        #080c14;
+      --bg-2:      #0d1320;
+      --bg-3:      #121929;
+      --bg-4:      #172033;
+
+      /* Borders */
+      --line:      rgba(255,255,255,0.06);
+      --line-2:    rgba(255,255,255,0.11);
+
+      /* Text */
+      --tx:        #e2e8f8;
+      --tx-2:      #8895b3;
+      --tx-3:      #4d5d7a;
+
+      /* Accent — âmbar dourado */
+      --gold:      #c8973a;
+      --gold-lt:   #e8b55a;
+      --gold-dim:  rgba(200,151,58,0.12);
+      --gold-glow: rgba(200,151,58,0.20);
+
+      /* Status */
+      --ok:        #3ea76e;
+      --ok-dim:    rgba(62,167,110,0.12);
+      --warn:      #d4883a;
+      --warn-dim:  rgba(212,136,58,0.14);
+      --err:       #c04a4a;
+      --err-dim:   rgba(192,74,74,0.12);
+
+      /* Typography */
+      --mono: 'DM Mono', monospace;
+      --sans: 'Sora', sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--bg); }
+
+    body {
+      font-family: var(--sans);
+      color: var(--tx);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       NOISE OVERLAY — textura sutil sobre toda a UI
+    ============================================================ */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 999;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      opacity: 0.4;
+    }
+
+    .screen { display: none; }
+    .screen.active { display: flex; }
+
+    /* ============================================================
+       AUTH SCREEN
+    ============================================================ */
+    #auth-screen {
+      min-height: 100vh;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      position: relative;
+    }
+
+    /* Grade de pontos no fundo */
+    #auth-screen::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Gradiente radial centrado */
+    #auth-screen::after {
+      content: '';
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(ellipse, rgba(200,151,58,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .auth-wrap {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 2.5rem;
+      width: 100%; max-width: 420px;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Logotipo */
+    .logo {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+    }
+    .logo-mark {
+      width: 48px; height: 48px;
+      border: 1px solid var(--gold);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: var(--gold);
+      position: relative;
+      box-shadow: 0 0 24px var(--gold-glow), inset 0 0 16px rgba(200,151,58,0.06);
+    }
+    .logo-mark::before {
+      content: '';
+      position: absolute; inset: -4px;
+      border: 1px solid rgba(200,151,58,0.15);
+      border-radius: 13px;
+    }
+    .logo-name {
+      font-family: var(--mono); font-size: 13px; font-weight: 500;
+      letter-spacing: 0.22em; color: var(--tx);
+      text-transform: uppercase;
+    }
+    .logo-sub {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: 0.14em; color: var(--tx-3);
+      text-transform: uppercase;
+    }
+
+    /* Card do QR */
+    .qr-card {
+      width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 1.75rem;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+    }
+
+    .qr-eyebrow {
+      align-self: flex-start;
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: 0.16em; color: var(--tx-3);
+      text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .qr-eyebrow::before {
+      content: '';
+      display: block; width: 16px; height: 1px;
+      background: var(--gold); opacity: 0.5;
+    }
+
+    .qr-area {
+      position: relative; width: 200px; height: 200px;
+    }
+
+    /* Cantos decorativos */
+    .qr-corner {
+      position: absolute; width: 20px; height: 20px;
+    }
+    .qr-corner.tl { top: -4px; left: -4px;
+      border-top: 1.5px solid var(--gold); border-left: 1.5px solid var(--gold); }
+    .qr-corner.tr { top: -4px; right: -4px;
+      border-top: 1.5px solid var(--gold); border-right: 1.5px solid var(--gold); }
+    .qr-corner.bl { bottom: -4px; left: -4px;
+      border-bottom: 1.5px solid var(--gold); border-left: 1.5px solid var(--gold); }
+    .qr-corner.br { bottom: -4px; right: -4px;
+      border-bottom: 1.5px solid var(--gold); border-right: 1.5px solid var(--gold); }
+
+    .qr-frame {
+      width: 200px; height: 200px;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+
+    #qrImage {
+      width: 184px; height: 184px;
+      object-fit: contain; display: none;
+    }
+
+    .qr-placeholder {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; width: 184px; height: 184px;
+    }
+    .qr-placeholder-dots {
+      display: flex; gap: 7px;
+    }
+    .qr-placeholder-dots span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #bbb;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    .qr-placeholder-dots span:nth-child(2) { animation-delay: .2s; }
+    .qr-placeholder-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink {
+      0%,100% { opacity:.2; transform:scale(.8); }
+      50%      { opacity:1;  transform:scale(1);  }
+    }
+    .qr-placeholder-txt {
+      font-family: var(--mono); font-size: 9px;
+      color: #aaa; letter-spacing: .06em; text-align: center;
+    }
+
+    .qr-overlay {
+      position: absolute; inset: 0;
+      background: rgba(8,12,20,0.9);
+      border-radius: 10px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; opacity: 0;
+      transition: opacity 0.25s;
+      cursor: pointer; backdrop-filter: blur(4px);
+    }
+    .qr-overlay.show { opacity: 1; }
+    .qr-overlay-icon {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.3);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold); font-size: 18px;
+    }
+    .qr-overlay-txt {
+      font-family: var(--mono); font-size: 10px;
+      color: var(--gold); letter-spacing: .06em; text-align: center;
+    }
+
+    /* Linha de scan */
+    .scan-line {
+      position: absolute; left: 4px; right: 4px; height: 1.5px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      top: 4px; opacity: 0; transition: opacity .3s;
+      animation: scan 2.8s linear infinite;
+    }
+    .scan-line.on { opacity: 1; }
+    @keyframes scan { 0% { top: 4px; } 100% { top: 196px; } }
+
+    /* Barra de status */
+    .status-row {
+      width: 100%;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg-3);
+      border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px 14px;
+    }
+    .s-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--tx-3); flex-shrink: 0; transition: background .4s;
+    }
+    .s-dot.loading    { background: var(--warn); animation: pulse-w 1s ease-in-out infinite; }
+    .s-dot.qr_ready   { background: var(--gold); }
+    .s-dot.connecting { background: var(--warn); animation: pulse-w 1s ease-in-out infinite; }
+    .s-dot.connected  { background: var(--ok); }
+    .s-dot.error      { background: var(--err); }
+    @keyframes pulse-w { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+    .s-text {
+      font-family: var(--mono); font-size: 11.5px;
+      color: var(--tx-2); transition: color .4s; flex: 1;
+    }
+    .s-text.loading    { color: var(--warn); }
+    .s-text.qr_ready   { color: var(--gold); }
+    .s-text.connecting { color: var(--warn); }
+    .s-text.connected  { color: var(--ok); }
+    .s-text.error      { color: var(--err); }
+
+    .ws-pill {
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: .08em; padding: 3px 8px;
+      border-radius: 20px; display: flex; align-items: center; gap: 5px;
+      background: var(--bg-4); border: 1px solid var(--line);
+      color: var(--tx-3); flex-shrink: 0;
+    }
+    .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--tx-3); }
+    .ws-dot.ok  { background: var(--ok); }
+    .ws-dot.err { background: var(--err); }
+
+    /* Erro */
+    .err-panel {
+      width: 100%; display: none; gap: 10px; align-items: flex-start;
+      background: var(--err-dim); border: 1px solid rgba(192,74,74,0.2);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .err-panel.show { display: flex; }
+    .err-icon { color: var(--err); font-size: 16px; flex-shrink: 0; }
+    .err-txt { font-size: 12.5px; color: var(--err); line-height: 1.6; }
+
+    /* Steps */
+    .steps { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+    .step {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 12.5px; color: var(--tx-2); line-height: 1.5;
+    }
+    .step-n {
+      font-family: var(--mono); font-size: 10px;
+      background: var(--bg-4); border: 1px solid var(--line-2);
+      border-radius: 4px; padding: 2px 7px;
+      color: var(--gold); flex-shrink: 0; margin-top: 1px;
+    }
+
+    /* Botão */
+    .btn-ghost {
+      font-family: var(--mono); font-size: 11px;
+      letter-spacing: .08em; text-transform: uppercase;
+      background: transparent; color: var(--tx-2);
+      border: 1px solid var(--line-2); border-radius: 7px;
+      padding: 9px 20px; cursor: pointer;
+      transition: border-color .2s, color .2s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+    .btn-row { display: flex; justify-content: center; }
+
+    /* ============================================================
+       MAIN SCREEN
+    ============================================================ */
+    #main-screen {
+      min-height: 100vh;
+      flex-direction: row;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 230px; flex-shrink: 0;
+      background: var(--bg-2);
+      border-right: 1px solid var(--line);
+      display: flex; flex-direction: column;
+      padding: 1.5rem 0;
+      position: fixed; top: 0; bottom: 0; left: 0;
+    }
+
+    .sb-brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 1.25rem;
+    }
+    .sb-icon {
+      width: 32px; height: 32px;
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; color: var(--gold);
+      box-shadow: 0 0 12px var(--gold-glow);
+    }
+    .sb-name {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      color: var(--tx); letter-spacing: .1em;
+    }
+    .sb-ver {
+      font-family: var(--mono); font-size: 9px;
+      color: var(--tx-3); letter-spacing: .1em; margin-top: 2px;
+    }
+
+    .sb-section {
+      padding: 0 1rem .5rem;
+      font-family: var(--mono); font-size: 9px;
+      letter-spacing: .18em; color: var(--tx-3);
+      text-transform: uppercase;
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 1.25rem;
+      font-size: 12.5px; color: var(--tx-2);
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all .15s; margin: 1px 0;
+      letter-spacing: .01em;
+    }
+    .nav-item i { font-size: 16px; }
+    .nav-item:hover { color: var(--tx); background: rgba(255,255,255,0.03); }
+    .nav-item.active {
+      color: var(--gold-lt);
+      background: var(--gold-dim);
+      border-left-color: var(--gold);
+    }
+
+    .sb-footer {
+      margin-top: auto; padding: 1.25rem 1.25rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .conn-badge {
+      display: flex; align-items: center; gap: 7px;
+      font-family: var(--mono); font-size: 11px; color: var(--ok);
+    }
+    .conn-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--ok);
+      animation: pulse-ok 2s ease-in-out infinite;
+    }
+    @keyframes pulse-ok {
+      0%,100% { box-shadow: 0 0 0 0 rgba(62,167,110,0.5); }
+      50%      { box-shadow: 0 0 0 4px rgba(62,167,110,0); }
+    }
+    .phone-line {
+      display: flex; align-items: center; gap: 7px;
+      font-family: var(--mono); font-size: 11px; color: var(--tx-3);
+      margin-top: 6px;
+    }
+    .phone-line span { color: var(--tx-2); }
+
+    .logout-btn {
+      display: flex; align-items: center; gap: 7px;
+      margin-top: 12px; font-size: 11.5px; color: var(--tx-3);
+      cursor: pointer; font-family: var(--mono); letter-spacing: .04em;
+      background: none; border: none; padding: 4px 0;
+      transition: color .15s;
+    }
+    .logout-btn:hover { color: var(--err); }
+
+    /* Conteúdo principal */
+    .main {
+      flex: 1; overflow-y: auto;
+      padding: 2rem 2.25rem;
+      margin-left: 230px;
+      display: flex; flex-direction: column; gap: 2rem;
+    }
+
+    .page-header {
+      display: flex; align-items: flex-end;
+      justify-content: space-between;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .page-title {
+      font-size: 22px; font-weight: 600;
+      color: var(--tx); letter-spacing: -.02em;
+    }
+    .page-sub {
+      font-size: 12.5px; color: var(--tx-3);
+      margin-top: 4px; font-weight: 300;
+    }
+    .page-badge {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: .1em; color: var(--gold);
+      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.2);
+      padding: 4px 10px; border-radius: 20px;
+    }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .stat-card {
+      background: var(--bg-2); border: 1px solid var(--line);
+      border-radius: 10px; padding: 1.25rem 1.5rem;
+      transition: border-color .2s;
+    }
+    .stat-card:hover { border-color: var(--line-2); }
+    .stat-label {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: var(--tx-3); margin-bottom: 10px;
+    }
+    .stat-val {
+      font-family: var(--mono); font-size: 28px;
+      font-weight: 500; color: var(--tx); letter-spacing: -.02em;
+    }
+    .stat-unit {
+      font-size: 11px; color: var(--tx-3); margin-left: 4px;
+    }
+
+    /* Section label */
+    .s-label {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: .16em; text-transform: uppercase;
+      color: var(--tx-3); margin-bottom: .75rem;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .s-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--line);
+    }
+
+    /* Action cards */
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .act-card {
+      background: var(--bg-2); border: 1px solid var(--line);
+      border-radius: 12px; padding: 1.5rem;
+      cursor: pointer; transition: border-color .2s, transform .15s, box-shadow .2s;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .act-card:hover {
+      border-color: rgba(200,151,58,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(200,151,58,0.1);
+    }
+    .act-icon {
+      width: 40px; height: 40px; border-radius: 9px;
+      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.18);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold); font-size: 18px;
+    }
+    .act-name { font-weight: 500; font-size: 14px; color: var(--tx); }
+    .act-desc { font-size: 12px; color: var(--tx-2); line-height: 1.6; margin-top: 2px; font-weight: 300; }
+    .act-cta {
+      margin-top: auto; font-size: 12px; color: var(--tx-3);
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--mono); letter-spacing: .04em;
+      transition: color .15s;
+    }
+    .act-card:hover .act-cta { color: var(--gold); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 1.75rem; right: 1.75rem;
+      background: var(--bg-3); border: 1px solid var(--line-2);
+      border-radius: 10px; padding: 12px 18px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; color: var(--tx); font-family: var(--mono);
+      opacity: 0; transform: translateY(10px);
+      transition: opacity .3s, transform .3s;
+      pointer-events: none; z-index: 100;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast i { color: var(--gold); }
+  </style>
+</head>
+<body>
+
+<!-- ================================================
+     AUTH SCREEN
+================================================ -->
+<div id="auth-screen" class="screen active">
+  <div class="auth-wrap">
+
+    <div class="logo">
+      <div class="logo-mark"><i class="ti ti-brand-whatsapp"></i></div>
+      <div>
+        <div class="logo-name">WA · SYSTEM</div>
+        <div class="logo-sub">Automação & Inteligência</div>
+      </div>
+    </div>
+
+    <div class="qr-card">
+      <div class="qr-eyebrow">autenticação via QR Code</div>
+
+      <div class="qr-area">
+        <div class="qr-corner tl"></div>
+        <div class="qr-corner tr"></div>
+        <div class="qr-corner bl"></div>
+        <div class="qr-corner br"></div>
+        <div class="scan-line" id="scanLine"></div>
+
+        <div class="qr-frame">
+          <img id="qrImage" alt="QR Code" />
+          <div class="qr-placeholder" id="qrPlaceholder">
+            <div class="qr-placeholder-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="qr-placeholder-txt">aguardando servidor...</div>
+          </div>
+          <div class="qr-overlay" id="qrOverlay" onclick="restartSession()">
+            <div class="qr-overlay-icon"><i class="ti ti-refresh"></i></div>
+            <div class="qr-overlay-txt">expirado — clique<br>para reiniciar</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-row">
+        <div class="s-dot" id="sDot"></div>
+        <div class="s-text" id="sTxt">conectando ao servidor...</div>
+        <div class="ws-pill" id="wsPill">
+          <div class="ws-dot" id="wsDot"></div>
+          <span id="wsLbl">ws</span>
+        </div>
+      </div>
+
+      <div class="err-panel" id="errPanel">
+        <i class="ti ti-alert-circle err-icon"></i>
+        <div class="err-txt" id="errTxt">Falha na autenticação. Reinicie para tentar novamente.</div>
+      </div>
+
+      <div class="steps">
+        <div class="step"><span class="step-n">01</span>Abra o WhatsApp no celular</div>
+        <div class="step"><span class="step-n">02</span>Toque em Dispositivos vinculados → Vincular dispositivo</div>
+        <div class="step"><span class="step-n">03</span>Aponte a câmera para o QR Code acima</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="restartSession()">
+          <i class="ti ti-refresh" style="font-size:13px"></i> Reiniciar sessão
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================================================
+     MAIN SCREEN
+================================================ -->
+<div id="main-screen" class="screen">
+
+  <nav class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-icon"><i class="ti ti-brand-whatsapp"></i></div>
+      <div>
+        <div class="sb-name">WA · SYSTEM</div>
+        <div class="sb-ver">v1.0 · production</div>
+      </div>
+    </div>
+
+    <div class="sb-section">principal</div>
+    <div class="nav-item active" onclick="setNav(this)">
+      <i class="ti ti-layout-dashboard"></i> Dashboard
+    </div>
+    <div class="nav-item" onclick="setNav(this)">
+      <i class="ti ti-file-export"></i> Exportar dados
+    </div>
+    <div class="nav-item" onclick="setNav(this)">
+      <i class="ti ti-send"></i> Disparar mensagens
+    </div>
+
+    <div class="sb-section" style="margin-top:1.5rem">em breve</div>
+    <div class="nav-item" style="opacity:.3;cursor:not-allowed">
+      <i class="ti ti-chart-bar"></i> Relatórios
+    </div>
+    <div class="nav-item" style="opacity:.3;cursor:not-allowed">
+      <i class="ti ti-settings"></i> Configurações
+    </div>
+
+    <div class="sb-footer">
+      <div class="conn-badge">
+        <div class="conn-dot"></div> sessão ativa
+      </div>
+      <div class="phone-line">
+        <i class="ti ti-device-mobile" style="font-size:13px"></i>
+        <span id="phoneDisplay">—</span>
+      </div>
+      <button class="logout-btn" onclick="logout()">
+        <i class="ti ti-logout"></i> encerrar sessão
+      </button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Visão geral da sessão e ações disponíveis</div>
+      </div>
+      <div class="page-badge">SESSÃO ATIVA</div>
+    </div>
+
+    <div>
+      <div class="s-label">métricas da sessão</div>
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-label">contatos</div>
+          <div class="stat-val" id="statC">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">grupos</div>
+          <div class="stat-val" id="statG">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">enviadas</div>
+          <div class="stat-val" id="statM">0<span class="stat-unit">msg</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="s-label">ações disponíveis</div>
+      <div class="actions">
+
+        <div class="act-card" onclick="showToast('Exportação — em breve')">
+          <div class="act-icon"><i class="ti ti-address-book"></i></div>
+          <div>
+            <div class="act-name">Exportar Contatos</div>
+            <div class="act-desc">Gere CSV ou JSON com todos os contatos e grupos da conta conectada.</div>
+          </div>
+          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+        </div>
+
+        <div class="act-card" onclick="showToast('Disparo — em breve')">
+          <div class="act-icon"><i class="ti ti-send"></i></div>
+          <div>
+            <div class="act-name">Enviar Mensagens</div>
+            <div class="act-desc">Dispare mensagens individuais ou em massa para contatos e grupos.</div>
+          </div>
+          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+        </div>
+
+        <div class="act-card" onclick="showToast('Monitor — em breve')">
+          <div class="act-icon"><i class="ti ti-eye"></i></div>
+          <div>
+            <div class="act-name">Monitorar Conversas</div>
+            <div class="act-desc">Acompanhe mensagens recebidas em tempo real com filtros avançados.</div>
+          </div>
+          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+        </div>
+
+        <div class="act-card" onclick="showToast('Auto-resposta — em breve')">
+          <div class="act-icon"><i class="ti ti-robot"></i></div>
+          <div>
+            <div class="act-name">Respostas Automáticas</div>
+            <div class="act-desc">Configure gatilhos por palavra-chave com respostas programadas.</div>
+          </div>
+          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<div class="toast" id="toast">
+  <i class="ti ti-check"></i>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+// ── WebSocket ────────────────────────────────────────────────
+let ws = null, reconnTimer = null;
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen  = () => { setWs(true); clearTimeout(reconnTimer); };
+  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(_) {} };
+  ws.onclose = () => { setWs(false); reconnTimer = setTimeout(connect, 3000); };
+  ws.onerror = () => setWs(false);
+}
+
+function send(p) { if (ws?.readyState === 1) ws.send(JSON.stringify(p)); }
+
+function setWs(ok) {
+  document.getElementById('wsDot').className = 'ws-dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('wsLbl').textContent = ok ? 'online' : 'offline';
+}
+
+// ── Mensagens do servidor ────────────────────────────────────
+const LABELS = {
+  idle:       'aguardando início...',
+  loading:    'iniciando navegador...',
+  qr_ready:   'QR pronto — escaneie com o celular',
+  connecting: 'autenticando...',
+  connected:  'autenticação confirmada',
+  error:      'falha na autenticação',
+  closed:     'sessão encerrada',
+};
+
+function handle(msg) {
+  if (msg.type === 'state') applyState(msg.state, msg.phone);
+  else if (msg.type === 'qr') showQR(msg.data);
+  else if (msg.type === 'info') showToast(msg.message);
+}
+
+function applyState(state, phone) {
+  const dot  = document.getElementById('sDot');
+  const txt  = document.getElementById('sTxt');
+  const line = document.getElementById('scanLine');
+  const ep   = document.getElementById('errPanel');
+
+  dot.className = 's-dot ' + state;
+  txt.className = 's-text ' + state;
+  txt.textContent = LABELS[state] || state;
+
+  if (state === 'connecting') { line.classList.add('on'); ep.classList.remove('show'); }
+  else if (state === 'connected') {
+    line.classList.remove('on');
+    ep.classList.remove('show');
+    if (phone) document.getElementById('phoneDisplay').textContent = phone;
+    setTimeout(() => {
+      document.getElementById('auth-screen').classList.remove('active');
+      document.getElementById('main-screen').classList.add('active');
+    }, 900);
+  } else if (state === 'error') {
+    line.classList.remove('on');
+    ep.classList.add('show');
+    document.getElementById('qrOverlay').classList.add('show');
+  } else if (state === 'qr_ready') {
+    line.classList.remove('on');
+    ep.classList.remove('show');
+    document.getElementById('qrOverlay').classList.remove('show');
+  } else {
+    line.classList.remove('on');
+  }
+}
+
+function showQR(src) {
+  const img = document.getElementById('qrImage');
+  img.src = src; img.style.display = 'block';
+  document.getElementById('qrPlaceholder').style.display = 'none';
+  document.getElementById('qrOverlay').classList.remove('show');
+}
+
+// ── Ações ────────────────────────────────────────────────────
+function restartSession() {
+  document.getElementById('qrOverlay').classList.remove('show');
+  document.getElementById('qrImage').style.display = 'none';
+  document.getElementById('qrPlaceholder').style.display = 'flex';
+  document.getElementById('errPanel').classList.remove('show');
+  send({ action: 'clear_session' });
+  setTimeout(() => send({ action: 'start_session' }), 1000);
+}
+
+function logout() {
+  send({ action: 'stop_session' });
+  document.getElementById('main-screen').classList.remove('active');
+  document.getElementById('auth-screen').classList.add('active');
+  document.getElementById('qrImage').style.display = 'none';
+  document.getElementById('qrPlaceholder').style.display = 'flex';
+  setTimeout(() => send({ action: 'start_session' }), 800);
+}
+
+function setNav(el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+connect();
+</script>
+</body>
+</html>

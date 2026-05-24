@@ -1,0 +1,18 @@
+/data
+# Ambientes virtuais (se tiver)
+.venv/
+venv/
+ENV/
+
+# Arquivos temporários do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variáveis de ambiente / Credenciais
+.env
+
+# Pastas de IDEs (opcional)
+.vscode/
+.idea/
