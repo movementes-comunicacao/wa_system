@@ -3,840 +3,984 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WA_SYSTEM · Automação</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.2.0/tabler-icons.min.css" />
+  <title>WA_SYSTEM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      /* Base */
-      --bg:        #080c14;
-      --bg-2:      #0d1320;
-      --bg-3:      #121929;
-      --bg-4:      #172033;
+      --g: #25D366; --gd: #128C7E; --gdim: rgba(37,211,102,.10);
+      --sf: #0f1a13; --sf2: #172218; --sf3: #1e2d20;
+      --tx: #e8ede9; --txm: #7a9a82;
+      --bdr: rgba(37,211,102,.18); --bdrs: rgba(37,211,102,.35);
+      --mono: 'IBM Plex Mono',monospace; --sans: 'IBM Plex Sans',sans-serif;
+      --danger: #e05252; --danger-bg: rgba(224,82,82,.10);
+      --warn: #f0a500; --warn-bg: rgba(240,165,0,.10);
+      --ok-bg: rgba(37,211,102,.10); --r: 8px; --rl: 10px;
+    }
+    html,body { height:100%; font-family:var(--sans); background:var(--sf); color:var(--tx); font-size:14px; line-height:1.5; overflow:hidden; }
+    .hidden { display:none !important; }
+    .grid-bg { position:absolute; inset:0; pointer-events:none; background-image: linear-gradient(rgba(37,211,102,.04) 1px,transparent 1px), linear-gradient(90deg,rgba(37,211,102,.04) 1px,transparent 1px); background-size:32px 32px; z-index:0; }
 
-      /* Borders */
-      --line:      rgba(255,255,255,0.06);
-      --line-2:    rgba(255,255,255,0.11);
+    /* ── Buttons ── */
+    .btn-p { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12px; letter-spacing:.06em; background:var(--g); color:#0f1a13; border:none; border-radius:var(--r); padding:10px 20px; cursor:pointer; font-weight:500; transition:opacity .2s,transform .15s; }
+    .btn-p:hover{opacity:.88} .btn-p:active{transform:scale(.97)} .btn-p:disabled{opacity:.4;cursor:not-allowed;transform:none}
+    .btn-g { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; background:transparent; color:var(--txm); border:.5px solid var(--bdr); border-radius:var(--r); padding:9px 16px; cursor:pointer; transition:border-color .2s,color .2s; }
+    .btn-g:hover{border-color:var(--bdrs);color:var(--tx)}
+    .btn-danger { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; background:var(--danger-bg); color:var(--danger); border:.5px solid rgba(224,82,82,.3); border-radius:var(--r); padding:9px 16px; cursor:pointer; transition:opacity .2s; }
+    .btn-danger:hover{opacity:.8}
 
-      /* Text */
-      --tx:        #e2e8f8;
-      --tx-2:      #8895b3;
-      --tx-3:      #4d5d7a;
+    /* ── Auth screen ── */
+    #auth-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:2rem 1.5rem; background:var(--sf); z-index:100; transition:opacity .4s,visibility .4s; }
+    #auth-screen.hiding{opacity:0;pointer-events:none}
+    .auth-box { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:2rem; max-width:460px; width:100%; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand-icon { width:36px; height:36px; border:1.5px solid var(--g); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--g); }
+    .brand-name { font-family:var(--mono); font-size:15px; letter-spacing:.08em; font-weight:500; }
+    .brand-tag { font-family:var(--mono); font-size:10px; color:var(--txm); letter-spacing:.12em; text-transform:uppercase; margin-top:2px; }
+    .qr-card { width:100%; background:var(--sf2); border:1px solid var(--bdr); border-radius:12px; padding:1.75rem; display:flex; flex-direction:column; align-items:center; gap:1.5rem; }
+    .qr-title { font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--txm); text-transform:uppercase; align-self:flex-start; }
+    .qr-wrap { position:relative; width:200px; height:200px; }
+    .qr-frame { width:200px; height:200px; background:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+    .qr-frame img { width:100%; height:100%; object-fit:contain; }
+    .qr-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; }
+    .qr-spinner { width:32px; height:32px; border:2px solid rgba(37,211,102,.2); border-top-color:var(--g); border-radius:50%; animation:spin 1s linear infinite; }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .qr-placeholder p { font-family:var(--mono); font-size:11px; color:#666; text-align:center; }
+    .corner { position:absolute; width:18px; height:18px; }
+    .corner-tl{top:-3px;left:-3px;border-top:2px solid var(--g);border-left:2px solid var(--g)}
+    .corner-tr{top:-3px;right:-3px;border-top:2px solid var(--g);border-right:2px solid var(--g)}
+    .corner-bl{bottom:-3px;left:-3px;border-bottom:2px solid var(--g);border-left:2px solid var(--g)}
+    .corner-br{bottom:-3px;right:-3px;border-bottom:2px solid var(--g);border-right:2px solid var(--g)}
+    .scan-line { position:absolute; left:3px; right:3px; height:2px; background:linear-gradient(90deg,transparent,var(--g),transparent); top:0; opacity:0; transition:opacity .3s; }
+    .scan-line.active{opacity:1;animation:scan 2.5s linear infinite}
+    @keyframes scan{0%{top:3px}100%{top:197px}}
+    .status-bar { width:100%; display:flex; align-items:center; gap:10px; background:var(--sf3); border:.5px solid var(--bdr); border-radius:6px; padding:10px 14px; }
+    .status-dot { width:8px; height:8px; border-radius:50%; background:var(--txm); flex-shrink:0; transition:background .4s; }
+    .status-dot.connecting{background:var(--warn);animation:pa 1s ease-in-out infinite}
+    .status-dot.success{background:var(--g)}
+    .status-dot.error{background:var(--danger)}
+    .status-dot.qr{background:var(--g);animation:pg 1.5s ease-in-out infinite}
+    @keyframes pa{0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes pg{0%,100%{opacity:1}50%{opacity:.5}}
+    .status-txt { font-family:var(--mono); font-size:12px; color:var(--txm); transition:color .4s; }
+    .status-txt.connecting{color:var(--warn)} .status-txt.success{color:var(--g)} .status-txt.error{color:var(--danger)} .status-txt.qr{color:var(--g)}
+    .alert-panel { width:100%; display:flex; align-items:flex-start; gap:8px; border-radius:6px; padding:12px 14px; font-size:13px; line-height:1.5; }
+    .alert-panel.error{background:var(--danger-bg);border:.5px solid rgba(224,82,82,.3);color:var(--danger)}
+    .alert-panel.warn{background:var(--warn-bg);border:.5px solid rgba(240,165,0,.3);color:var(--warn)}
+    .alert-panel i{font-size:16px;flex-shrink:0;margin-top:1px}
+    .steps { width:100%; display:flex; flex-direction:column; gap:8px; }
+    .step { display:flex; align-items:flex-start; gap:10px; font-size:13px; color:var(--txm); line-height:1.4; }
+    .step-n { font-family:var(--mono); font-size:10px; background:var(--sf3); border:.5px solid var(--bdr); border-radius:4px; padding:2px 6px; color:var(--g); flex-shrink:0; margin-top:1px; }
+    .auth-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
 
-      /* Accent — âmbar dourado */
-      --gold:      #c8973a;
-      --gold-lt:   #e8b55a;
-      --gold-dim:  rgba(200,151,58,0.12);
-      --gold-glow: rgba(200,151,58,0.20);
+    /* ── App layout ── */
+    #app-screen { display:flex; height:100vh; width:100vw; overflow:hidden; }
+    .sidebar { width:200px; flex-shrink:0; background:var(--sf2); border-right:1px solid var(--bdr); display:flex; flex-direction:column; padding:1.25rem 0; height:100%; overflow-y:auto; }
+    .sb-brand{display:flex;align-items:center;gap:8px;padding:0 1rem 1.25rem;border-bottom:.5px solid var(--bdr);margin-bottom:1rem}
+    .sb-icon{width:28px;height:28px;border:1.5px solid var(--g);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--g)}
+    .sb-name{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.05em}
+    .sb-sec{padding:0 .75rem .5rem;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--txm);text-transform:uppercase}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 1rem;font-size:13px;color:var(--txm);cursor:pointer;border-left:2px solid transparent;transition:all .15s;margin:1px 0;user-select:none}
+    .nav-item:hover{color:var(--tx);background:rgba(37,211,102,.04)}
+    .nav-item.active{color:var(--g);background:rgba(37,211,102,.08);border-left-color:var(--g)}
+    .nav-item i{font-size:16px}
+    .nav-item.dim{opacity:.4;cursor:not-allowed}
+    .nav-item.dim:hover{background:none;color:var(--txm)}
+    .sb-footer{margin-top:auto;padding:1rem 1rem 0;border-top:.5px solid var(--bdr)}
+    .conn{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--g)}
+    .conn-dot{width:6px;height:6px;border-radius:50%;background:var(--g);animation:pg 2s ease-in-out infinite}
+    .conn-phone{font-family:var(--mono);font-size:10px;color:var(--txm);margin-top:4px}
+    .logout-btn{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--txm);cursor:pointer;font-family:var(--mono);background:none;border:none;padding:4px 0;transition:color .15s}
+    .logout-btn:hover{color:var(--danger)}
+    .main-content{flex:1;height:100%;overflow-y:auto}
 
-      /* Status */
-      --ok:        #3ea76e;
-      --ok-dim:    rgba(62,167,110,0.12);
-      --warn:      #d4883a;
-      --warn-dim:  rgba(212,136,58,0.14);
-      --err:       #c04a4a;
-      --err-dim:   rgba(192,74,74,0.12);
+    /* ── Pages ── */
+    .page{padding:1.75rem;display:flex;flex-direction:column;gap:0;min-height:100%}
+    .ph{display:flex;flex-direction:column;gap:4px;margin-bottom:1.5rem}
+    .pt{font-family:var(--mono);font-size:16px;font-weight:500}
+    .ps{font-size:13px;color:var(--txm)}
 
-      /* Typography */
-      --mono: 'DM Mono', monospace;
-      --sans: 'Sora', sans-serif;
-    }
+    /* ── Shared components ── */
+    .meta-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
+    .meta-box{background:var(--sf2);border:.5px solid var(--bdr);border-radius:var(--r);padding:12px 14px}
+    .ml{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txm);margin-bottom:6px}
+    .mv{font-family:var(--mono);font-size:20px;font-weight:500}
+    .sec-label{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--txm)}
+    .action-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:1.25rem}
+    .sel-count{font-family:var(--mono);font-size:12px;color:var(--txm);margin-left:auto}
+    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:3rem 1rem;background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);margin-bottom:1.25rem}
+    .empty-icon{font-size:32px;color:var(--txm)}
+    .empty-t{font-family:var(--mono);font-size:13px;color:var(--txm)}
+    .progress-wrap{background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.5rem;display:flex;flex-direction:column;gap:14px;margin-bottom:1.25rem}
+    .prog-header{display:flex;justify-content:space-between;align-items:center}
+    .prog-title{font-family:var(--mono);font-size:13px;font-weight:500}
+    .prog-pct{font-family:var(--mono);font-size:12px;color:var(--txm)}
+    .prog-bar-bg{background:var(--sf3);border-radius:20px;height:6px;overflow:hidden}
+    .prog-bar{height:6px;background:var(--g);border-radius:20px;width:0%;transition:width .4s}
+    .prog-steps{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+    .prog-step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txm)}
+    .prog-step i{font-size:16px}
+    .prog-step.done{color:var(--g)} .prog-step.run{color:var(--warn)}
+    .result-card{background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.5rem;display:flex;flex-direction:column;gap:1rem}
+    .result-top{display:flex;align-items:center;gap:12px}
+    .result-icon{width:40px;height:40px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:20px}
+    .ri-ok{background:var(--ok-bg);color:var(--g)} .ri-warn{background:var(--warn-bg);color:var(--warn)}
+    .result-title{font-family:var(--mono);font-size:14px;font-weight:500}
+    .result-sub{font-size:12px;color:var(--txm);margin-top:2px}
+    .result-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .rs-box{background:var(--sf3);border-radius:var(--r);padding:10px 12px}
+    .rs-l{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--txm);margin-bottom:4px}
+    .rs-v{font-family:var(--mono);font-size:18px;font-weight:500}
 
-    html, body { height: 100%; background: var(--bg); }
+    /* ── Dashboard ── */
+    .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .qa-card{background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.25rem;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:border-color .2s,background .2s,transform .15s}
+    .qa-card:hover{border-color:var(--bdrs);background:var(--sf3);transform:translateY(-1px)}
+    .qa-icon{font-size:20px;color:var(--g)}
+    .qa-name{font-size:13px;font-weight:500}
+    .qa-desc{font-size:12px;color:var(--txm)}
 
-    body {
-      font-family: var(--sans);
-      color: var(--tx);
-      -webkit-font-smoothing: antialiased;
-    }
+    /* ── Export ── */
+    .filter-bar{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap}
+    .chip{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;border:1px solid var(--bdr);background:transparent;color:var(--txm);font-family:var(--mono);font-size:12px;cursor:pointer;transition:all .15s}
+    .chip:hover{border-color:var(--bdrs);color:var(--tx)}
+    .chip.sel{background:var(--gdim);border-color:var(--g);color:var(--g)}
+    .chip i{font-size:14px}
+    .tbl-wrap{background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);overflow:hidden;margin-bottom:1.25rem}
+    .tbl-head{display:grid;grid-template-columns:32px 1fr 90px 130px 70px;padding:10px 14px;border-bottom:.5px solid var(--bdr);background:var(--sf3)}
+    .tbl-col{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txm)}
+    .tbl-body{max-height:260px;overflow-y:auto}
+    .tbl-row{display:grid;grid-template-columns:32px 1fr 90px 130px 70px;padding:10px 14px;border-bottom:.5px solid rgba(37,211,102,.07);align-items:center;transition:background .1s}
+    .tbl-row:last-child{border-bottom:none}
+    .tbl-row:hover{background:rgba(37,211,102,.03)}
+    .chk{width:16px;height:16px;border:1px solid var(--bdr);border-radius:3px;cursor:pointer;accent-color:var(--g)}
+    .av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:500;flex-shrink:0}
+    .av-c{background:rgba(37,211,102,.12);color:var(--g)}
+    .av-g{background:rgba(18,140,126,.18);color:#5DCAA5}
+    .row-info{display:flex;align-items:center;gap:10px}
+    .row-name{font-size:13px;color:var(--tx)}
+    .row-sub{font-size:11px;color:var(--txm);margin-top:1px}
+    .row-num{font-family:var(--mono);font-size:12px;color:var(--txm)}
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-family:var(--mono);font-size:10px}
+    .badge-c{background:rgba(37,211,102,.1);color:var(--g)}
+    .badge-g{background:rgba(18,140,126,.15);color:#5DCAA5}
+    .fmt-row{display:flex;gap:8px}
+    .fmt-btn{flex:1;padding:8px;font-family:var(--mono);font-size:11px;background:var(--sf3);border:.5px solid var(--bdr);border-radius:var(--r);color:var(--txm);cursor:pointer;text-align:center;transition:all .15s}
+    .fmt-btn.sel{border-color:var(--g);color:var(--g);background:rgba(37,211,102,.08)}
+    .code-preview{background:var(--sf3);border:.5px solid var(--bdr);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;color:var(--txm);white-space:pre-wrap;line-height:1.6;max-height:130px;overflow-y:auto}
+    .dl-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;background:var(--g);color:#0f1a13;border:none;border-radius:var(--r);cursor:pointer;font-weight:500;transition:opacity .2s}
+    .dl-btn:hover{opacity:.88}
 
-    /* ============================================================
-       NOISE OVERLAY — textura sutil sobre toda a UI
-    ============================================================ */
-    body::before {
-      content: '';
-      position: fixed; inset: 0; pointer-events: none; z-index: 999;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-      opacity: 0.4;
-    }
+    /* ── Messages ── */
+    .upload-zone{border:1.5px dashed var(--bdr);border-radius:var(--rl);padding:2.5rem 1.5rem;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;cursor:pointer;transition:border-color .2s,background .2s}
+    .upload-zone:hover,.upload-zone.drag-over{border-color:var(--bdrs);background:rgba(37,211,102,.03)}
+    .upload-inner{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;pointer-events:none}
+    .upload-inner .btn-p{pointer-events:all}
+    .upload-icon{font-size:36px;color:var(--txm);margin-bottom:4px}
+    .upload-title{font-size:15px;font-weight:500}
+    .upload-sub{font-size:13px;color:var(--txm)}
+    .upload-hint{font-size:12px;color:var(--txm);font-family:var(--mono)}
+    .upload-hint code{color:var(--g)}
+    .spec-card{background:var(--sf2);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem}
+    .spec-title{font-family:var(--mono);font-size:11px;color:var(--txm);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+    .spec-table{width:100%;border-collapse:collapse;font-size:12px}
+    .spec-table th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txm);padding:6px 10px;border-bottom:.5px solid var(--bdr);text-align:left;white-space:nowrap}
+    .spec-table td{padding:8px 10px;border-bottom:.5px solid rgba(37,211,102,.06);vertical-align:top}
+    .spec-table tr:last-child td{border-bottom:none}
+    .sbadge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-family:var(--mono);font-size:10px}
+    .sbadge-d{background:rgba(37,211,102,.12);color:var(--g)}
+    .sbadge-v{background:rgba(240,165,0,.12);color:var(--warn)}
+    .sbadge-m{background:rgba(18,140,126,.15);color:#5DCAA5}
+    .spec-ex{font-family:var(--mono);font-size:11px;color:var(--txm);white-space:nowrap}
+    .preview-header{display:flex;align-items:center;justify-content:space-between;background:var(--sf2);border:.5px solid var(--bdr);border-radius:var(--r);padding:10px 14px;margin-bottom:1.25rem}
+    .preview-file{font-family:var(--mono);font-size:12px;color:var(--g);display:flex;align-items:center;gap:8px}
+    .msg-list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;margin-bottom:1rem}
+    .msg-item{background:var(--sf2);border:.5px solid var(--bdr);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+    .mpi-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .mpi-row{font-family:var(--mono);font-size:10px;color:var(--txm)}
+    .mpi-dest{font-family:var(--mono);font-size:11px;color:var(--g)}
+    .mpi-type{font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:20px}
+    .mpi-tc{background:rgba(37,211,102,.1);color:var(--g)}
+    .mpi-tg{background:rgba(18,140,126,.15);color:#5DCAA5}
+    .mpi-msg{font-size:13px;color:var(--tx);line-height:1.5}
+    .mpi-vars{display:flex;gap:6px;flex-wrap:wrap}
+    .mpi-var{font-family:var(--mono);font-size:10px;background:rgba(240,165,0,.1);color:var(--warn);padding:1px 7px;border-radius:20px}
+    .mpi-var.empty{background:rgba(224,82,82,.1);color:var(--danger)}
+    .err-block{background:var(--danger-bg);border:.5px solid rgba(224,82,82,.3);border-radius:var(--r);padding:1rem;margin-bottom:1rem}
+    .err-title{font-family:var(--mono);font-size:11px;color:var(--danger);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .err-row{font-size:12px;color:var(--danger);padding:4px 0;border-bottom:.5px solid rgba(224,82,82,.15);font-family:var(--mono)}
+    .err-row:last-child{border-bottom:none}
+    .send-log{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;margin-top:4px}
+    .log-e{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;padding:5px 0;border-bottom:.5px solid rgba(37,211,102,.06)}
+    .log-e:last-child{border-bottom:none}
+    .log-ok{color:var(--g)} .log-fail{color:var(--danger)} .log-wait{color:var(--txm)}
+    .log-dest{color:var(--tx);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .log-st{font-size:10px;flex-shrink:0}
 
-    .screen { display: none; }
-    .screen.active { display: flex; }
-
-    /* ============================================================
-       AUTH SCREEN
-    ============================================================ */
-    #auth-screen {
-      min-height: 100vh;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-      position: relative;
-    }
-
-    /* Grade de pontos no fundo */
-    #auth-screen::before {
-      content: '';
-      position: fixed; inset: 0; pointer-events: none;
-      background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
-
-    /* Gradiente radial centrado */
-    #auth-screen::after {
-      content: '';
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 600px; height: 600px;
-      background: radial-gradient(ellipse, rgba(200,151,58,0.06) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .auth-wrap {
-      position: relative; z-index: 1;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 2.5rem;
-      width: 100%; max-width: 420px;
-      animation: fadeUp 0.5s ease both;
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Logotipo */
-    .logo {
-      display: flex; flex-direction: column;
-      align-items: center; gap: 10px;
-    }
-    .logo-mark {
-      width: 48px; height: 48px;
-      border: 1px solid var(--gold);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; color: var(--gold);
-      position: relative;
-      box-shadow: 0 0 24px var(--gold-glow), inset 0 0 16px rgba(200,151,58,0.06);
-    }
-    .logo-mark::before {
-      content: '';
-      position: absolute; inset: -4px;
-      border: 1px solid rgba(200,151,58,0.15);
-      border-radius: 13px;
-    }
-    .logo-name {
-      font-family: var(--mono); font-size: 13px; font-weight: 500;
-      letter-spacing: 0.22em; color: var(--tx);
-      text-transform: uppercase;
-    }
-    .logo-sub {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.14em; color: var(--tx-3);
-      text-transform: uppercase;
-    }
-
-    /* Card do QR */
-    .qr-card {
-      width: 100%;
-      background: var(--bg-2);
-      border: 1px solid var(--line-2);
-      border-radius: 16px;
-      padding: 2rem;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 1.75rem;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
-    }
-
-    .qr-eyebrow {
-      align-self: flex-start;
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 0.16em; color: var(--tx-3);
-      text-transform: uppercase;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .qr-eyebrow::before {
-      content: '';
-      display: block; width: 16px; height: 1px;
-      background: var(--gold); opacity: 0.5;
-    }
-
-    .qr-area {
-      position: relative; width: 200px; height: 200px;
-    }
-
-    /* Cantos decorativos */
-    .qr-corner {
-      position: absolute; width: 20px; height: 20px;
-    }
-    .qr-corner.tl { top: -4px; left: -4px;
-      border-top: 1.5px solid var(--gold); border-left: 1.5px solid var(--gold); }
-    .qr-corner.tr { top: -4px; right: -4px;
-      border-top: 1.5px solid var(--gold); border-right: 1.5px solid var(--gold); }
-    .qr-corner.bl { bottom: -4px; left: -4px;
-      border-bottom: 1.5px solid var(--gold); border-left: 1.5px solid var(--gold); }
-    .qr-corner.br { bottom: -4px; right: -4px;
-      border-bottom: 1.5px solid var(--gold); border-right: 1.5px solid var(--gold); }
-
-    .qr-frame {
-      width: 200px; height: 200px;
-      background: #fff;
-      border-radius: 10px;
-      overflow: hidden;
-      display: flex; align-items: center; justify-content: center;
-      position: relative;
-    }
-
-    #qrImage {
-      width: 184px; height: 184px;
-      object-fit: contain; display: none;
-    }
-
-    .qr-placeholder {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 12px; width: 184px; height: 184px;
-    }
-    .qr-placeholder-dots {
-      display: flex; gap: 7px;
-    }
-    .qr-placeholder-dots span {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #bbb;
-      animation: blink 1.4s ease-in-out infinite;
-    }
-    .qr-placeholder-dots span:nth-child(2) { animation-delay: .2s; }
-    .qr-placeholder-dots span:nth-child(3) { animation-delay: .4s; }
-    @keyframes blink {
-      0%,100% { opacity:.2; transform:scale(.8); }
-      50%      { opacity:1;  transform:scale(1);  }
-    }
-    .qr-placeholder-txt {
-      font-family: var(--mono); font-size: 9px;
-      color: #aaa; letter-spacing: .06em; text-align: center;
-    }
-
-    .qr-overlay {
-      position: absolute; inset: 0;
-      background: rgba(8,12,20,0.9);
-      border-radius: 10px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 10px; opacity: 0;
-      transition: opacity 0.25s;
-      cursor: pointer; backdrop-filter: blur(4px);
-    }
-    .qr-overlay.show { opacity: 1; }
-    .qr-overlay-icon {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.3);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--gold); font-size: 18px;
-    }
-    .qr-overlay-txt {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--gold); letter-spacing: .06em; text-align: center;
-    }
-
-    /* Linha de scan */
-    .scan-line {
-      position: absolute; left: 4px; right: 4px; height: 1.5px;
-      background: linear-gradient(90deg, transparent, var(--gold), transparent);
-      top: 4px; opacity: 0; transition: opacity .3s;
-      animation: scan 2.8s linear infinite;
-    }
-    .scan-line.on { opacity: 1; }
-    @keyframes scan { 0% { top: 4px; } 100% { top: 196px; } }
-
-    /* Barra de status */
-    .status-row {
-      width: 100%;
-      display: flex; align-items: center; gap: 10px;
-      background: var(--bg-3);
-      border: 1px solid var(--line);
-      border-radius: 8px; padding: 10px 14px;
-    }
-    .s-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--tx-3); flex-shrink: 0; transition: background .4s;
-    }
-    .s-dot.loading    { background: var(--warn); animation: pulse-w 1s ease-in-out infinite; }
-    .s-dot.qr_ready   { background: var(--gold); }
-    .s-dot.connecting { background: var(--warn); animation: pulse-w 1s ease-in-out infinite; }
-    .s-dot.connected  { background: var(--ok); }
-    .s-dot.error      { background: var(--err); }
-    @keyframes pulse-w { 0%,100%{opacity:1;} 50%{opacity:.3;} }
-
-    .s-text {
-      font-family: var(--mono); font-size: 11.5px;
-      color: var(--tx-2); transition: color .4s; flex: 1;
-    }
-    .s-text.loading    { color: var(--warn); }
-    .s-text.qr_ready   { color: var(--gold); }
-    .s-text.connecting { color: var(--warn); }
-    .s-text.connected  { color: var(--ok); }
-    .s-text.error      { color: var(--err); }
-
-    .ws-pill {
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: .08em; padding: 3px 8px;
-      border-radius: 20px; display: flex; align-items: center; gap: 5px;
-      background: var(--bg-4); border: 1px solid var(--line);
-      color: var(--tx-3); flex-shrink: 0;
-    }
-    .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--tx-3); }
-    .ws-dot.ok  { background: var(--ok); }
-    .ws-dot.err { background: var(--err); }
-
-    /* Erro */
-    .err-panel {
-      width: 100%; display: none; gap: 10px; align-items: flex-start;
-      background: var(--err-dim); border: 1px solid rgba(192,74,74,0.2);
-      border-radius: 8px; padding: 12px 14px;
-    }
-    .err-panel.show { display: flex; }
-    .err-icon { color: var(--err); font-size: 16px; flex-shrink: 0; }
-    .err-txt { font-size: 12.5px; color: var(--err); line-height: 1.6; }
-
-    /* Steps */
-    .steps { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-    .step {
-      display: flex; align-items: flex-start; gap: 10px;
-      font-size: 12.5px; color: var(--tx-2); line-height: 1.5;
-    }
-    .step-n {
-      font-family: var(--mono); font-size: 10px;
-      background: var(--bg-4); border: 1px solid var(--line-2);
-      border-radius: 4px; padding: 2px 7px;
-      color: var(--gold); flex-shrink: 0; margin-top: 1px;
-    }
-
-    /* Botão */
-    .btn-ghost {
-      font-family: var(--mono); font-size: 11px;
-      letter-spacing: .08em; text-transform: uppercase;
-      background: transparent; color: var(--tx-2);
-      border: 1px solid var(--line-2); border-radius: 7px;
-      padding: 9px 20px; cursor: pointer;
-      transition: border-color .2s, color .2s;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
-
-    .btn-row { display: flex; justify-content: center; }
-
-    /* ============================================================
-       MAIN SCREEN
-    ============================================================ */
-    #main-screen {
-      min-height: 100vh;
-      flex-direction: row;
-    }
-
-    /* Sidebar */
-    .sidebar {
-      width: 230px; flex-shrink: 0;
-      background: var(--bg-2);
-      border-right: 1px solid var(--line);
-      display: flex; flex-direction: column;
-      padding: 1.5rem 0;
-      position: fixed; top: 0; bottom: 0; left: 0;
-    }
-
-    .sb-brand {
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 1.25rem 1.5rem;
-      border-bottom: 1px solid var(--line);
-      margin-bottom: 1.25rem;
-    }
-    .sb-icon {
-      width: 32px; height: 32px;
-      border: 1px solid var(--gold);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; color: var(--gold);
-      box-shadow: 0 0 12px var(--gold-glow);
-    }
-    .sb-name {
-      font-family: var(--mono); font-size: 12px; font-weight: 500;
-      color: var(--tx); letter-spacing: .1em;
-    }
-    .sb-ver {
-      font-family: var(--mono); font-size: 9px;
-      color: var(--tx-3); letter-spacing: .1em; margin-top: 2px;
-    }
-
-    .sb-section {
-      padding: 0 1rem .5rem;
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: .18em; color: var(--tx-3);
-      text-transform: uppercase;
-    }
-
-    .nav-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 1.25rem;
-      font-size: 12.5px; color: var(--tx-2);
-      cursor: pointer;
-      border-left: 2px solid transparent;
-      transition: all .15s; margin: 1px 0;
-      letter-spacing: .01em;
-    }
-    .nav-item i { font-size: 16px; }
-    .nav-item:hover { color: var(--tx); background: rgba(255,255,255,0.03); }
-    .nav-item.active {
-      color: var(--gold-lt);
-      background: var(--gold-dim);
-      border-left-color: var(--gold);
-    }
-
-    .sb-footer {
-      margin-top: auto; padding: 1.25rem 1.25rem 0;
-      border-top: 1px solid var(--line);
-    }
-    .conn-badge {
-      display: flex; align-items: center; gap: 7px;
-      font-family: var(--mono); font-size: 11px; color: var(--ok);
-    }
-    .conn-dot {
-      width: 6px; height: 6px; border-radius: 50%; background: var(--ok);
-      animation: pulse-ok 2s ease-in-out infinite;
-    }
-    @keyframes pulse-ok {
-      0%,100% { box-shadow: 0 0 0 0 rgba(62,167,110,0.5); }
-      50%      { box-shadow: 0 0 0 4px rgba(62,167,110,0); }
-    }
-    .phone-line {
-      display: flex; align-items: center; gap: 7px;
-      font-family: var(--mono); font-size: 11px; color: var(--tx-3);
-      margin-top: 6px;
-    }
-    .phone-line span { color: var(--tx-2); }
-
-    .logout-btn {
-      display: flex; align-items: center; gap: 7px;
-      margin-top: 12px; font-size: 11.5px; color: var(--tx-3);
-      cursor: pointer; font-family: var(--mono); letter-spacing: .04em;
-      background: none; border: none; padding: 4px 0;
-      transition: color .15s;
-    }
-    .logout-btn:hover { color: var(--err); }
-
-    /* Conteúdo principal */
-    .main {
-      flex: 1; overflow-y: auto;
-      padding: 2rem 2.25rem;
-      margin-left: 230px;
-      display: flex; flex-direction: column; gap: 2rem;
-    }
-
-    .page-header {
-      display: flex; align-items: flex-end;
-      justify-content: space-between;
-      padding-bottom: 1.5rem;
-      border-bottom: 1px solid var(--line);
-    }
-    .page-title {
-      font-size: 22px; font-weight: 600;
-      color: var(--tx); letter-spacing: -.02em;
-    }
-    .page-sub {
-      font-size: 12.5px; color: var(--tx-3);
-      margin-top: 4px; font-weight: 300;
-    }
-    .page-badge {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: .1em; color: var(--gold);
-      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.2);
-      padding: 4px 10px; border-radius: 20px;
-    }
-
-    /* Stats */
-    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
-    .stat-card {
-      background: var(--bg-2); border: 1px solid var(--line);
-      border-radius: 10px; padding: 1.25rem 1.5rem;
-      transition: border-color .2s;
-    }
-    .stat-card:hover { border-color: var(--line-2); }
-    .stat-label {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: .12em; text-transform: uppercase;
-      color: var(--tx-3); margin-bottom: 10px;
-    }
-    .stat-val {
-      font-family: var(--mono); font-size: 28px;
-      font-weight: 500; color: var(--tx); letter-spacing: -.02em;
-    }
-    .stat-unit {
-      font-size: 11px; color: var(--tx-3); margin-left: 4px;
-    }
-
-    /* Section label */
-    .s-label {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: .16em; text-transform: uppercase;
-      color: var(--tx-3); margin-bottom: .75rem;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .s-label::after {
-      content: ''; flex: 1; height: 1px; background: var(--line);
-    }
-
-    /* Action cards */
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .act-card {
-      background: var(--bg-2); border: 1px solid var(--line);
-      border-radius: 12px; padding: 1.5rem;
-      cursor: pointer; transition: border-color .2s, transform .15s, box-shadow .2s;
-      display: flex; flex-direction: column; gap: 14px;
-    }
-    .act-card:hover {
-      border-color: rgba(200,151,58,0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(200,151,58,0.1);
-    }
-    .act-icon {
-      width: 40px; height: 40px; border-radius: 9px;
-      background: var(--gold-dim); border: 1px solid rgba(200,151,58,0.18);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--gold); font-size: 18px;
-    }
-    .act-name { font-weight: 500; font-size: 14px; color: var(--tx); }
-    .act-desc { font-size: 12px; color: var(--tx-2); line-height: 1.6; margin-top: 2px; font-weight: 300; }
-    .act-cta {
-      margin-top: auto; font-size: 12px; color: var(--tx-3);
-      display: flex; align-items: center; gap: 5px;
-      font-family: var(--mono); letter-spacing: .04em;
-      transition: color .15s;
-    }
-    .act-card:hover .act-cta { color: var(--gold); }
-
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 1.75rem; right: 1.75rem;
-      background: var(--bg-3); border: 1px solid var(--line-2);
-      border-radius: 10px; padding: 12px 18px;
-      display: flex; align-items: center; gap: 10px;
-      font-size: 13px; color: var(--tx); font-family: var(--mono);
-      opacity: 0; transform: translateY(10px);
-      transition: opacity .3s, transform .3s;
-      pointer-events: none; z-index: 100;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
-    }
-    .toast.show { opacity: 1; transform: translateY(0); }
-    .toast i { color: var(--gold); }
+    /* ── Toast ── */
+    .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--sf3);border:.5px solid var(--bdrs);border-radius:var(--rl);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-family:var(--mono);opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;pointer-events:none;z-index:1000}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast i{color:var(--g);font-size:16px}
   </style>
 </head>
 <body>
 
-<!-- ================================================
-     AUTH SCREEN
-================================================ -->
-<div id="auth-screen" class="screen active">
-  <div class="auth-wrap">
-
-    <div class="logo">
-      <div class="logo-mark"><i class="ti ti-brand-whatsapp"></i></div>
+<!-- ══════════════════ AUTH ══════════════════ -->
+<div id="auth-screen">
+  <div class="grid-bg"></div>
+  <div class="auth-box">
+    <div class="brand">
+      <div class="brand-icon"><i class="ti ti-brand-whatsapp"></i></div>
       <div>
-        <div class="logo-name">WA · SYSTEM</div>
-        <div class="logo-sub">Automação & Inteligência</div>
+        <div class="brand-name">WA_SYSTEM</div>
+        <div class="brand-tag">v1.0 · autenticação</div>
       </div>
     </div>
 
     <div class="qr-card">
-      <div class="qr-eyebrow">autenticação via QR Code</div>
+      <div class="qr-title">// escaneie o QR Code</div>
 
-      <div class="qr-area">
-        <div class="qr-corner tl"></div>
-        <div class="qr-corner tr"></div>
-        <div class="qr-corner bl"></div>
-        <div class="qr-corner br"></div>
+      <div class="qr-wrap">
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
         <div class="scan-line" id="scanLine"></div>
-
-        <div class="qr-frame">
-          <img id="qrImage" alt="QR Code" />
-          <div class="qr-placeholder" id="qrPlaceholder">
-            <div class="qr-placeholder-dots">
-              <span></span><span></span><span></span>
-            </div>
-            <div class="qr-placeholder-txt">aguardando servidor...</div>
-          </div>
-          <div class="qr-overlay" id="qrOverlay" onclick="restartSession()">
-            <div class="qr-overlay-icon"><i class="ti ti-refresh"></i></div>
-            <div class="qr-overlay-txt">expirado — clique<br>para reiniciar</div>
+        <div class="qr-frame" id="qrFrame">
+          <div class="qr-placeholder">
+            <div class="qr-spinner"></div>
+            <p id="qrHint">iniciando sessão...</p>
           </div>
         </div>
       </div>
 
-      <div class="status-row">
-        <div class="s-dot" id="sDot"></div>
-        <div class="s-text" id="sTxt">conectando ao servidor...</div>
-        <div class="ws-pill" id="wsPill">
-          <div class="ws-dot" id="wsDot"></div>
-          <span id="wsLbl">ws</span>
-        </div>
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <div class="status-txt" id="statusTxt">conectando ao servidor...</div>
       </div>
 
-      <div class="err-panel" id="errPanel">
-        <i class="ti ti-alert-circle err-icon"></i>
-        <div class="err-txt" id="errTxt">Falha na autenticação. Reinicie para tentar novamente.</div>
+      <div id="alertPanel" class="alert-panel error hidden">
+        <i class="ti ti-alert-circle"></i>
+        <span id="alertMsg"></span>
       </div>
 
       <div class="steps">
-        <div class="step"><span class="step-n">01</span>Abra o WhatsApp no celular</div>
-        <div class="step"><span class="step-n">02</span>Toque em Dispositivos vinculados → Vincular dispositivo</div>
-        <div class="step"><span class="step-n">03</span>Aponte a câmera para o QR Code acima</div>
+        <div class="step"><span class="step-n">01</span> Abra o WhatsApp no seu celular</div>
+        <div class="step"><span class="step-n">02</span> Toque em Dispositivos vinculados → Vincular dispositivo</div>
+        <div class="step"><span class="step-n">03</span> Aponte a câmera para este QR Code</div>
       </div>
 
-      <div class="btn-row">
-        <button class="btn-ghost" onclick="restartSession()">
-          <i class="ti ti-refresh" style="font-size:13px"></i> Reiniciar sessão
+      <div class="auth-actions">
+        <button class="btn-danger" id="btnClear" onclick="sendCmd('clear_session')">
+          <i class="ti ti-trash"></i> limpar sessão
+        </button>
+        <button class="btn-g" onclick="sendCmd('restart_session')">
+          <i class="ti ti-refresh"></i> reiniciar
         </button>
       </div>
     </div>
-
   </div>
 </div>
 
-<!-- ================================================
-     MAIN SCREEN
-================================================ -->
-<div id="main-screen" class="screen">
-
-  <nav class="sidebar">
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app-screen" class="hidden">
+  <aside class="sidebar">
     <div class="sb-brand">
       <div class="sb-icon"><i class="ti ti-brand-whatsapp"></i></div>
-      <div>
-        <div class="sb-name">WA · SYSTEM</div>
-        <div class="sb-ver">v1.0 · production</div>
-      </div>
+      <div class="sb-name">WA_SYSTEM</div>
     </div>
-
-    <div class="sb-section">principal</div>
-    <div class="nav-item active" onclick="setNav(this)">
-      <i class="ti ti-layout-dashboard"></i> Dashboard
-    </div>
-    <div class="nav-item" onclick="setNav(this)">
-      <i class="ti ti-file-export"></i> Exportar dados
-    </div>
-    <div class="nav-item" onclick="setNav(this)">
-      <i class="ti ti-send"></i> Disparar mensagens
-    </div>
-
-    <div class="sb-section" style="margin-top:1.5rem">em breve</div>
-    <div class="nav-item" style="opacity:.3;cursor:not-allowed">
-      <i class="ti ti-chart-bar"></i> Relatórios
-    </div>
-    <div class="nav-item" style="opacity:.3;cursor:not-allowed">
-      <i class="ti ti-settings"></i> Configurações
-    </div>
-
+    <div class="sb-sec">principal</div>
+    <div class="nav-item active" onclick="goPage('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+    <div class="nav-item" onclick="goPage('export',this)"><i class="ti ti-file-export"></i> Exportar dados</div>
+    <div class="nav-item" onclick="goPage('messages',this)"><i class="ti ti-send"></i> Disparar mensagens</div>
+    <div class="sb-sec" style="margin-top:1rem">em breve</div>
+    <div class="nav-item dim"><i class="ti ti-chart-bar"></i> Relatórios</div>
+    <div class="nav-item dim"><i class="ti ti-settings"></i> Configurações</div>
     <div class="sb-footer">
-      <div class="conn-badge">
-        <div class="conn-dot"></div> sessão ativa
-      </div>
-      <div class="phone-line">
-        <i class="ti ti-device-mobile" style="font-size:13px"></i>
-        <span id="phoneDisplay">—</span>
-      </div>
-      <button class="logout-btn" onclick="logout()">
-        <i class="ti ti-logout"></i> encerrar sessão
-      </button>
+      <div class="conn"><div class="conn-dot"></div>conectado</div>
+      <div class="conn-phone" id="sidePhone"></div>
+      <button class="logout-btn" onclick="sendCmd('clear_session')"><i class="ti ti-logout"></i> desconectar</button>
     </div>
-  </nav>
+  </aside>
 
-  <main class="main">
-    <div class="page-header">
-      <div>
-        <div class="page-title">Dashboard</div>
-        <div class="page-sub">Visão geral da sessão e ações disponíveis</div>
+  <main class="main-content">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page">
+      <div class="ph"><div class="pt">dashboard</div><div class="ps">Conta conectada e pronta</div></div>
+      <div class="meta-row">
+        <div class="meta-box"><div class="ml">contatos</div><div class="mv" id="dashContacts">—</div></div>
+        <div class="meta-box"><div class="ml">grupos</div><div class="mv" id="dashGroups">—</div></div>
+        <div class="meta-box"><div class="ml">enviadas hoje</div><div class="mv" id="dashSent">0</div></div>
       </div>
-      <div class="page-badge">SESSÃO ATIVA</div>
-    </div>
-
-    <div>
-      <div class="s-label">métricas da sessão</div>
-      <div class="stats">
-        <div class="stat-card">
-          <div class="stat-label">contatos</div>
-          <div class="stat-val" id="statC">—</div>
+      <div class="sec-label" style="margin-bottom:10px">ações rápidas</div>
+      <div class="qa-grid">
+        <div class="qa-card" onclick="goPage('export',document.querySelector('[onclick*=export]'))">
+          <i class="ti ti-file-export qa-icon"></i>
+          <div class="qa-name">Exportar contatos/grupos</div>
+          <div class="qa-desc">Busca direto do WhatsApp Web conectado</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">grupos</div>
-          <div class="stat-val" id="statG">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">enviadas</div>
-          <div class="stat-val" id="statM">0<span class="stat-unit">msg</span></div>
+        <div class="qa-card" onclick="goPage('messages',document.querySelector('[onclick*=messages]'))">
+          <i class="ti ti-send qa-icon"></i>
+          <div class="qa-name">Disparar mensagens</div>
+          <div class="qa-desc">Envio em massa via CSV com variáveis</div>
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="s-label">ações disponíveis</div>
-      <div class="actions">
+    <!-- EXPORT -->
+    <div id="page-export" class="page hidden">
+      <div class="ph"><div class="pt">exportar dados</div><div class="ps">Extrai contatos e grupos direto da sessão conectada</div></div>
 
-        <div class="act-card" onclick="showToast('Exportação — em breve')">
-          <div class="act-icon"><i class="ti ti-address-book"></i></div>
-          <div>
-            <div class="act-name">Exportar Contatos</div>
-            <div class="act-desc">Gere CSV ou JSON com todos os contatos e grupos da conta conectada.</div>
-          </div>
-          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+      <div id="exp-config">
+        <div class="sec-label" style="margin-bottom:10px">// filtro de tipo</div>
+        <div class="filter-bar">
+          <button class="chip sel" id="chip-all" onclick="Export.setFilter('all')"><i class="ti ti-list"></i> todos</button>
+          <button class="chip" id="chip-contacts" onclick="Export.setFilter('contacts')"><i class="ti ti-user"></i> contatos</button>
+          <button class="chip" id="chip-groups" onclick="Export.setFilter('groups')"><i class="ti ti-users-group"></i> grupos</button>
         </div>
-
-        <div class="act-card" onclick="showToast('Disparo — em breve')">
-          <div class="act-icon"><i class="ti ti-send"></i></div>
-          <div>
-            <div class="act-name">Enviar Mensagens</div>
-            <div class="act-desc">Dispare mensagens individuais ou em massa para contatos e grupos.</div>
-          </div>
-          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+        <div class="action-bar" style="margin-top:0;margin-bottom:1.25rem">
+          <button class="btn-p" id="btnExport" onclick="Export.start()">
+            <i class="ti ti-file-export"></i> exportar do WhatsApp
+          </button>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--txm)">Leva alguns segundos para varrer os chats</span>
         </div>
+      </div>
 
-        <div class="act-card" onclick="showToast('Monitor — em breve')">
-          <div class="act-icon"><i class="ti ti-eye"></i></div>
-          <div>
-            <div class="act-name">Monitorar Conversas</div>
-            <div class="act-desc">Acompanhe mensagens recebidas em tempo real com filtros avançados.</div>
+      <div id="exp-progress" class="hidden">
+        <div class="progress-wrap">
+          <div class="prog-header"><div class="prog-title">exportando dados...</div><div class="prog-pct" id="expPct">0%</div></div>
+          <div class="prog-bar-bg"><div class="prog-bar" id="expBar"></div></div>
+          <div class="prog-steps">
+            <div class="prog-step" id="eps1"><i class="ti ti-circle"></i> conectando à lista de chats</div>
+            <div class="prog-step" id="eps2"><i class="ti ti-circle"></i> varrendo contatos e grupos</div>
+            <div class="prog-step" id="eps3"><i class="ti ti-circle"></i> aplicando filtros</div>
+            <div class="prog-step" id="eps4"><i class="ti ti-circle"></i> salvando arquivo</div>
           </div>
-          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
         </div>
+      </div>
 
-        <div class="act-card" onclick="showToast('Auto-resposta — em breve')">
-          <div class="act-icon"><i class="ti ti-robot"></i></div>
-          <div>
-            <div class="act-name">Respostas Automáticas</div>
-            <div class="act-desc">Configure gatilhos por palavra-chave com respostas programadas.</div>
+      <div id="exp-result" class="hidden">
+        <div class="result-card">
+          <div class="result-top">
+            <div class="result-icon ri-ok"><i class="ti ti-check"></i></div>
+            <div>
+              <div class="result-title" id="expTitle">Exportação concluída</div>
+              <div class="result-sub" id="expSub">Arquivo salvo em data/exports/</div>
+            </div>
           </div>
-          <div class="act-cta"><i class="ti ti-arrow-right" style="font-size:13px"></i> executar</div>
+          <div class="result-stats">
+            <div class="rs-box"><div class="rs-l">contatos</div><div class="rs-v" id="expC">—</div></div>
+            <div class="rs-box"><div class="rs-l">grupos</div><div class="rs-v" id="expG">—</div></div>
+            <div class="rs-box"><div class="rs-l">total</div><div class="rs-v" id="expT">—</div></div>
+          </div>
+          <div>
+            <div class="sec-label" style="margin-bottom:8px">formato de download</div>
+            <div class="fmt-row">
+              <div class="fmt-btn sel" id="fmt-csv" onclick="Export.setFmt('csv')">CSV</div>
+              <div class="fmt-btn" id="fmt-json" onclick="Export.setFmt('json')">JSON</div>
+            </div>
+          </div>
+          <div id="expPreview" class="code-preview"></div>
+          <button class="dl-btn" onclick="Export.download()"><i class="ti ti-download"></i> baixar arquivo</button>
         </div>
+        <button class="btn-g" style="width:fit-content;margin-top:10px" onclick="Export.reset()"><i class="ti ti-refresh"></i> nova exportação</button>
+      </div>
 
+      <div id="exp-empty" class="empty-state hidden">
+        <i class="ti ti-inbox empty-icon"></i>
+        <div class="empty-t" id="expEmptyMsg">Nenhum registro encontrado</div>
+        <button class="btn-g" onclick="Export.reset()">tentar novamente</button>
+      </div>
+
+      <div id="exp-error" class="hidden">
+        <div class="alert-panel error" style="margin-bottom:1rem">
+          <i class="ti ti-alert-circle"></i>
+          <span id="expErrMsg"></span>
+        </div>
+        <button class="btn-g" onclick="Export.reset()"><i class="ti ti-refresh"></i> tentar novamente</button>
       </div>
     </div>
+
+    <!-- MESSAGES -->
+    <div id="page-messages" class="page hidden">
+      <div class="ph"><div class="pt">disparar mensagens</div><div class="ps">Faça upload de um CSV para envio personalizado em massa</div></div>
+
+      <div id="msg-upload">
+        <div class="upload-zone" id="dropZone">
+          <div class="upload-inner">
+            <i class="ti ti-file-text upload-icon"></i>
+            <div class="upload-title">Arraste seu arquivo CSV aqui</div>
+            <div class="upload-sub">ou clique para selecionar</div>
+            <div class="upload-hint">Formato: <code>destinatario, [var1, var2...], mensagem</code></div>
+            <button class="btn-p" onclick="document.getElementById('csvInput').click()"><i class="ti ti-upload"></i> selecionar arquivo</button>
+          </div>
+          <input type="file" id="csvInput" accept=".csv,text/csv" style="display:none" />
+        </div>
+        <div class="spec-card">
+          <div class="spec-title"><i class="ti ti-info-circle"></i> estrutura esperada do CSV</div>
+          <div style="overflow-x:auto">
+            <table class="spec-table">
+              <thead><tr><th>coluna 1 (destinatário)</th><th>colunas do meio (variáveis)</th><th>última coluna (mensagem)</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="sbadge sbadge-d">obrigatório</span></td>
+                  <td><span class="sbadge sbadge-v">usar como {NomeDaColuna}</span></td>
+                  <td><span class="sbadge sbadge-m">template da mensagem</span></td>
+                </tr>
+                <tr>
+                  <td class="spec-ex">+5511999990000</td>
+                  <td class="spec-ex">Ana, Centro</td>
+                  <td class="spec-ex">Olá {Nome} do {Bairro}!</td>
+                </tr>
+                <tr>
+                  <td class="spec-ex">120363000@g.us</td>
+                  <td class="spec-ex">Produto X, 10%</td>
+                  <td class="spec-ex">Promo de {Produto}: {Desconto} off!</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="alert-panel error hidden" id="msgUploadErr">
+          <i class="ti ti-alert-circle"></i><span id="msgUploadErrTxt"></span>
+        </div>
+      </div>
+
+      <div id="msg-preview" class="hidden">
+        <div class="preview-header">
+          <div class="preview-file"><i class="ti ti-file-text"></i><span id="previewFile"></span></div>
+          <button class="btn-g" style="padding:6px 12px;font-size:11px" onclick="Messages.reset()"><i class="ti ti-x"></i> remover</button>
+        </div>
+        <div class="meta-row">
+          <div class="meta-box"><div class="ml">linhas válidas</div><div class="mv" id="msgValid">0</div></div>
+          <div class="meta-box"><div class="ml">com erro</div><div class="mv" id="msgErrCnt">0</div></div>
+          <div class="meta-box"><div class="ml">variáveis</div><div class="mv" id="msgVarCnt">0</div></div>
+        </div>
+        <div class="sec-label" style="margin-bottom:10px">// prévia das mensagens processadas</div>
+        <div class="msg-list" id="msgPreviewList"></div>
+        <div class="err-block hidden" id="msgErrBlock">
+          <div class="err-title"><i class="ti ti-alert-triangle"></i> linhas com problema</div>
+          <div id="msgErrList"></div>
+        </div>
+        <div class="action-bar">
+          <button class="btn-p" id="btnSend" onclick="Messages.send()"><i class="ti ti-send"></i> disparar mensagens</button>
+          <span class="sel-count" id="msgSendLbl"></span>
+        </div>
+      </div>
+
+      <div id="msg-sending" class="hidden">
+        <div class="progress-wrap">
+          <div class="prog-header">
+            <div class="prog-title">disparando mensagens...</div>
+            <div class="prog-pct" id="sendPct">0%</div>
+          </div>
+          <div class="prog-bar-bg"><div class="prog-bar" id="sendBar"></div></div>
+          <div class="send-log" id="sendLog"></div>
+        </div>
+      </div>
+
+      <div id="msg-done" class="hidden">
+        <div class="result-card">
+          <div class="result-top">
+            <div class="result-icon ri-ok"><i class="ti ti-check"></i></div>
+            <div>
+              <div class="result-title">Envio concluído</div>
+              <div class="result-sub" id="doneSub"></div>
+            </div>
+          </div>
+          <div class="result-stats">
+            <div class="rs-box"><div class="rs-l">enviadas</div><div class="rs-v" id="doneOk">0</div></div>
+            <div class="rs-box"><div class="rs-l">falhas</div><div class="rs-v" id="doneFail">0</div></div>
+            <div class="rs-box"><div class="rs-l">total</div><div class="rs-v" id="doneTotal">0</div></div>
+          </div>
+        </div>
+        <button class="btn-g" style="width:fit-content;margin-top:10px" onclick="Messages.reset()"><i class="ti ti-refresh"></i> novo envio</button>
+      </div>
+    </div>
+
   </main>
-
 </div>
 
-<div class="toast" id="toast">
-  <i class="ti ti-check"></i>
-  <span id="toastMsg"></span>
-</div>
+<div class="toast" id="toast"><i class="ti ti-check"></i><span id="toastMsg"></span></div>
 
 <script>
-// ── WebSocket ────────────────────────────────────────────────
-let ws = null, reconnTimer = null;
+// ════════════════════════════════════════════════════════
+// WebSocket connection
+// ════════════════════════════════════════════════════════
+let ws;
+let wsRetries = 0;
+const MAX_RETRIES = 10;
 
-function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onopen  = () => { setWs(true); clearTimeout(reconnTimer); };
-  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(_) {} };
-  ws.onclose = () => { setWs(false); reconnTimer = setTimeout(connect, 3000); };
-  ws.onerror = () => setWs(false);
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    wsRetries = 0;
+    console.log('[WS] conectado');
+  };
+
+  ws.onmessage = e => {
+    try { handleServerMsg(JSON.parse(e.data)); }
+    catch(err) { console.error('[WS] parse error', err); }
+  };
+
+  ws.onclose = () => {
+    if (wsRetries < MAX_RETRIES) {
+      wsRetries++;
+      const delay = Math.min(1000 * wsRetries, 8000);
+      console.log(`[WS] reconectando em ${delay}ms (tentativa ${wsRetries})`);
+      setTimeout(connectWS, delay);
+    }
+  };
+
+  ws.onerror = err => console.error('[WS] erro:', err);
 }
 
-function send(p) { if (ws?.readyState === 1) ws.send(JSON.stringify(p)); }
-
-function setWs(ok) {
-  document.getElementById('wsDot').className = 'ws-dot ' + (ok ? 'ok' : 'err');
-  document.getElementById('wsLbl').textContent = ok ? 'online' : 'offline';
-}
-
-// ── Mensagens do servidor ────────────────────────────────────
-const LABELS = {
-  idle:       'aguardando início...',
-  loading:    'iniciando navegador...',
-  qr_ready:   'QR pronto — escaneie com o celular',
-  connecting: 'autenticando...',
-  connected:  'autenticação confirmada',
-  error:      'falha na autenticação',
-  closed:     'sessão encerrada',
-};
-
-function handle(msg) {
-  if (msg.type === 'state') applyState(msg.state, msg.phone);
-  else if (msg.type === 'qr') showQR(msg.data);
-  else if (msg.type === 'info') showToast(msg.message);
-}
-
-function applyState(state, phone) {
-  const dot  = document.getElementById('sDot');
-  const txt  = document.getElementById('sTxt');
-  const line = document.getElementById('scanLine');
-  const ep   = document.getElementById('errPanel');
-
-  dot.className = 's-dot ' + state;
-  txt.className = 's-text ' + state;
-  txt.textContent = LABELS[state] || state;
-
-  if (state === 'connecting') { line.classList.add('on'); ep.classList.remove('show'); }
-  else if (state === 'connected') {
-    line.classList.remove('on');
-    ep.classList.remove('show');
-    if (phone) document.getElementById('phoneDisplay').textContent = phone;
-    setTimeout(() => {
-      document.getElementById('auth-screen').classList.remove('active');
-      document.getElementById('main-screen').classList.add('active');
-    }, 900);
-  } else if (state === 'error') {
-    line.classList.remove('on');
-    ep.classList.add('show');
-    document.getElementById('qrOverlay').classList.add('show');
-  } else if (state === 'qr_ready') {
-    line.classList.remove('on');
-    ep.classList.remove('show');
-    document.getElementById('qrOverlay').classList.remove('show');
-  } else {
-    line.classList.remove('on');
+function sendCmd(action) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action }));
   }
 }
 
-function showQR(src) {
-  const img = document.getElementById('qrImage');
-  img.src = src; img.style.display = 'block';
-  document.getElementById('qrPlaceholder').style.display = 'none';
-  document.getElementById('qrOverlay').classList.remove('show');
+// ════════════════════════════════════════════════════════
+// Handle server messages
+// ════════════════════════════════════════════════════════
+function handleServerMsg(msg) {
+  if (msg.type === 'state') handleState(msg);
+  else if (msg.type === 'qr') handleQR(msg.data);
+  else if (msg.type === 'send_progress') handleSendProgress(msg);
+  else if (msg.type === 'send_done') handleSendDone(msg);
 }
 
-// ── Ações ────────────────────────────────────────────────────
-function restartSession() {
-  document.getElementById('qrOverlay').classList.remove('show');
-  document.getElementById('qrImage').style.display = 'none';
-  document.getElementById('qrPlaceholder').style.display = 'flex';
-  document.getElementById('errPanel').classList.remove('show');
-  send({ action: 'clear_session' });
-  setTimeout(() => send({ action: 'start_session' }), 1000);
+function handleState(msg) {
+  const state = msg.state;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusTxt');
+  const alert = document.getElementById('alertPanel');
+  const scanLine = document.getElementById('scanLine');
+
+  dot.className = 'status-dot';
+  txt.className = 'status-txt';
+  alert.classList.add('hidden');
+
+  const states = {
+    idle:       { dot: '',           txt: 'aguardando início...', hint: 'iniciando...' },
+    starting:   { dot: 'connecting', txt: 'abrindo Chromium...', hint: 'carregando...' },
+    qr_ready:   { dot: 'qr',         txt: 'QR Code pronto — escaneie agora', hint: 'aponte a câmera' },
+    connecting: { dot: 'connecting', txt: 'autenticando...', hint: 'conectando...' },
+    connected:  { dot: 'success',    txt: 'conectado!' },
+    error:      { dot: 'error',      txt: 'erro na sessão' },
+    stopped:    { dot: '',           txt: 'sessão encerrada' },
+  };
+
+  const s = states[state] || { dot: '', txt: state };
+  if (s.dot) dot.classList.add(s.dot);
+  txt.classList.add(s.dot || '');
+  txt.textContent = s.txt;
+
+  const hint = document.getElementById('qrHint');
+  if (hint && s.hint) hint.textContent = s.hint;
+
+  if (state === 'qr_ready') {
+    scanLine.classList.add('active');
+  } else {
+    scanLine.classList.remove('active');
+  }
+
+  if (state === 'error') {
+    alert.classList.remove('hidden');
+    document.getElementById('alertMsg').textContent = 'Falha na autenticação. Use "reiniciar" para tentar novamente.';
+  }
+
+  if (state === 'connected') {
+    // Transição para o app
+    const authEl = document.getElementById('auth-screen');
+    const appEl = document.getElementById('app-screen');
+    authEl.classList.add('hiding');
+    appEl.classList.remove('hidden');
+    goPage('dashboard', document.querySelector('.nav-item[onclick*=dashboard]'));
+    if (msg.phone) {
+      document.getElementById('sidePhone').textContent = msg.phone;
+    }
+    setTimeout(() => authEl.style.display = 'none', 400);
+  }
+
+  if (state === 'idle' || state === 'stopped') {
+    // Volta para autenticação
+    const authEl = document.getElementById('auth-screen');
+    const appEl = document.getElementById('app-screen');
+    authEl.style.display = '';
+    authEl.classList.remove('hiding');
+    appEl.classList.add('hidden');
+    resetQRFrame();
+  }
 }
 
-function logout() {
-  send({ action: 'stop_session' });
-  document.getElementById('main-screen').classList.remove('active');
-  document.getElementById('auth-screen').classList.add('active');
-  document.getElementById('qrImage').style.display = 'none';
-  document.getElementById('qrPlaceholder').style.display = 'flex';
-  setTimeout(() => send({ action: 'start_session' }), 800);
+function handleQR(base64) {
+  const frame = document.getElementById('qrFrame');
+  frame.innerHTML = `<img src="data:image/png;base64,${base64}" alt="QR Code WhatsApp" style="width:100%;height:100%;object-fit:contain" />`;
 }
 
-function setNav(el) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  el.classList.add('active');
+function resetQRFrame() {
+  document.getElementById('qrFrame').innerHTML = `
+    <div class="qr-placeholder">
+      <div class="qr-spinner"></div>
+      <p id="qrHint">iniciando sessão...</p>
+    </div>`;
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
+// ════════════════════════════════════════════════════════
+// Navigation
+// ════════════════════════════════════════════════════════
+function goPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.nav-item[onclick]').forEach(n => n.classList.remove('active'));
+  const target = document.getElementById('page-' + name);
+  if (target) target.classList.remove('hidden');
+  if (el) el.classList.add('active');
+}
+
+function toast(msg, icon = 'ti-check') {
   document.getElementById('toastMsg').textContent = msg;
+  const t = document.getElementById('toast');
+  t.querySelector('i').className = `ti ${icon}`;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2600);
+  setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-connect();
+// ════════════════════════════════════════════════════════
+// Export module
+// ════════════════════════════════════════════════════════
+const Export = (() => {
+  let filter = 'all';
+  let fmt = 'csv';
+  let lastData = null;
+
+  function setFilter(f) {
+    filter = f;
+    ['all','contacts','groups'].forEach(k =>
+      document.getElementById('chip-'+k).classList.toggle('sel', k === f));
+  }
+
+  async function start() {
+    show('exp-progress');
+    animateProgress(['eps1','eps2','eps3','eps4'], [15,50,80,100], async () => {
+      try {
+        const res = await fetch(`/api/export?filter=${filter}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Erro desconhecido');
+        }
+        lastData = await res.json();
+        showResult(lastData);
+      } catch(e) {
+        show('exp-error');
+        document.getElementById('expErrMsg').textContent = e.message;
+      }
+    });
+  }
+
+  function animateProgress(ids, pcts, done) {
+    let i = 0;
+    function tick() {
+      if (i > 0) {
+        const prev = document.getElementById(ids[i-1]);
+        prev.className = 'prog-step done';
+        prev.querySelector('i').className = 'ti ti-check';
+      }
+      if (i < ids.length) {
+        const cur = document.getElementById(ids[i]);
+        cur.className = 'prog-step run';
+        cur.querySelector('i').className = 'ti ti-loader';
+        document.getElementById('expBar').style.width = pcts[i] + '%';
+        document.getElementById('expPct').textContent = pcts[i] + '%';
+        i++;
+        setTimeout(tick, i === ids.length ? 600 : 700);
+      } else {
+        done();
+      }
+    }
+    tick();
+  }
+
+  function showResult(data) {
+    const nc = data.contacts.length;
+    const ng = data.groups.length;
+    if (nc + ng === 0) {
+      show('exp-empty');
+      return;
+    }
+    document.getElementById('expC').textContent = nc;
+    document.getElementById('expG').textContent = ng;
+    document.getElementById('expT').textContent = nc + ng;
+    document.getElementById('expTitle').textContent = 'Exportação concluída com sucesso';
+    document.getElementById('expSub').textContent = `${nc+ng} registro${nc+ng>1?'s':''} salvos em data/exports/`;
+    renderPreview();
+    show('exp-result');
+    toast('Exportação concluída!');
+    document.getElementById('dashContacts').textContent = nc;
+    document.getElementById('dashGroups').textContent = ng;
+  }
+
+  function setFmt(f) {
+    fmt = f;
+    ['csv','json'].forEach(k => document.getElementById('fmt-'+k).classList.toggle('sel', k === f));
+    renderPreview();
+  }
+
+  function renderPreview() {
+    if (!lastData) return;
+    const all = [...lastData.contacts, ...lastData.groups];
+    const block = document.getElementById('expPreview');
+    if (fmt === 'csv') {
+      const header = 'name,phone,type';
+      const rows = all.slice(0,6).map(r =>
+        `"${(r.name||'').replace(/"/g,'""')}","${(r.phone||'').replace(/"/g,'""')}",${r.type}`);
+      block.textContent = header + '\n' + rows.join('\n') +
+        (all.length > 6 ? `\n... (+${all.length-6} linhas)` : '');
+    } else {
+      block.textContent = JSON.stringify(all.slice(0,2), null, 2) +
+        (all.length > 2 ? `\n// ... mais ${all.length-2} registros` : '');
+    }
+  }
+
+  function download() {
+    if (!lastData) return;
+    const all = [...lastData.contacts, ...lastData.groups];
+    let content, mime, ext;
+    if (fmt === 'csv') {
+      const header = 'name,phone,type';
+      const rows = all.map(r =>
+        `"${(r.name||'').replace(/"/g,'""')}","${(r.phone||'').replace(/"/g,'""')}",${r.type}`);
+      // BOM UTF-8 para Excel abrir sem encoding quebrado
+      const bom = '\uFEFF';
+      content = bom + header + '\n' + rows.join('\n');
+      mime = 'text/csv;charset=utf-8;'; ext = 'csv';
+    } else {
+      content = JSON.stringify(all, null, 2);
+      mime = 'application/json'; ext = 'json';
+    }
+    const blob = new Blob([content], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `wa_export_${Date.now()}.${ext}`; a.click();
+    URL.revokeObjectURL(url);
+    toast('Arquivo baixado!');
+  }
+
+  function reset() {
+    lastData = null;
+    ['exp-config','exp-progress','exp-result','exp-empty','exp-error'].forEach(id =>
+      document.getElementById(id).classList.add('hidden'));
+    document.getElementById('exp-config').classList.remove('hidden');
+    ['eps1','eps2','eps3','eps4'].forEach(id => {
+      const el = document.getElementById(id);
+      el.className = 'prog-step';
+      el.querySelector('i').className = 'ti ti-circle';
+    });
+    document.getElementById('expBar').style.width = '0%';
+    document.getElementById('expPct').textContent = '0%';
+    setFilter(filter);
+  }
+
+  function show(id) {
+    ['exp-config','exp-progress','exp-result','exp-empty','exp-error'].forEach(i =>
+      document.getElementById(i).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+  }
+
+  return { setFilter, start, setFmt, download, reset };
+})();
+
+// ════════════════════════════════════════════════════════
+// Messages module
+// ════════════════════════════════════════════════════════
+const Messages = (() => {
+  let csvFile = null;
+  let parsedData = null;
+
+  function reset() {
+    csvFile = null; parsedData = null;
+    ['msg-upload','msg-preview','msg-sending','msg-done'].forEach(id =>
+      document.getElementById(id).classList.add('hidden'));
+    document.getElementById('msg-upload').classList.remove('hidden');
+    document.getElementById('msgUploadErr').classList.add('hidden');
+    document.getElementById('csvInput').value = '';
+    document.getElementById('sendBar').style.width = '0%';
+    document.getElementById('sendPct').textContent = '0%';
+    document.getElementById('sendLog').innerHTML = '';
+  }
+
+  function showUploadErr(msg) {
+    const p = document.getElementById('msgUploadErr');
+    document.getElementById('msgUploadErrTxt').textContent = msg;
+    p.classList.remove('hidden');
+  }
+
+  async function handleFile(file) {
+    document.getElementById('msgUploadErr').classList.add('hidden');
+    if (!file.name.endsWith('.csv')) {
+      showUploadErr('Formato inválido. Envie um arquivo .csv');
+      return;
+    }
+    csvFile = file;
+
+    // Valida via API
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch('/api/messages/validate', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { showUploadErr(data.detail || 'Erro ao validar CSV'); return; }
+      parsedData = data;
+      renderPreview(file.name, data);
+    } catch(e) {
+      showUploadErr('Erro ao comunicar com o servidor: ' + e.message);
+    }
+  }
+
+  function renderPreview(filename, data) {
+    document.getElementById('previewFile').textContent = filename;
+    document.getElementById('msgValid').textContent = data.valid_count;
+    document.getElementById('msgErrCnt').textContent = data.error_count;
+    document.getElementById('msgVarCnt').textContent = data.var_columns.length;
+    document.getElementById('msgSendLbl').textContent =
+      `${data.valid_count} mensagem${data.valid_count!==1?'s':''} será${data.valid_count!==1?'o':''} disparada${data.valid_count!==1?'s':''}`;
+    document.getElementById('btnSend').disabled = data.valid_count === 0;
+
+    const list = document.getElementById('msgPreviewList');
+    list.innerHTML = '';
+    data.preview.forEach(row => {
+      const isGroup = row.dest.endsWith('@g.us');
+      const typeHtml = isGroup
+        ? '<span class="mpi-type mpi-tg">grupo</span>'
+        : '<span class="mpi-type mpi-tc">contato</span>';
+      const varHtml = Object.entries(row.vars).map(([k,v]) =>
+        `<span class="mpi-var${v===''?' empty':''}">{${k}}${v===''?'=∅':'='+v}</span>`
+      ).join('');
+      const div = document.createElement('div');
+      div.className = 'msg-item';
+      div.innerHTML = `
+        <div class="mpi-meta">
+          <span class="mpi-row">Linha ${row.line}</span>
+          <span class="mpi-dest">${row.dest}</span>
+          ${typeHtml}
+        </div>
+        ${varHtml ? `<div class="mpi-vars">${varHtml}</div>` : ''}
+        <div class="mpi-msg">${escHtml(row.message)}</div>
+      `;
+      list.appendChild(div);
+    });
+
+    const errBlock = document.getElementById('msgErrBlock');
+    if (data.errors.length > 0) {
+      errBlock.classList.remove('hidden');
+      document.getElementById('msgErrList').innerHTML =
+        data.errors.map(e => `<div class="err-row">Linha ${e.line}: ${e.msg}</div>`).join('');
+    } else {
+      errBlock.classList.add('hidden');
+    }
+
+    show('msg-preview');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function send() {
+    if (!csvFile) return;
+    show('msg-sending');
+    document.getElementById('sendLog').innerHTML = '';
+
+    const form = new FormData();
+    form.append('file', csvFile);
+
+    try {
+      const res = await fetch('/api/messages/send', { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json();
+        toast('Erro: ' + (err.detail || 'falha no envio'), 'ti-alert-circle');
+        show('msg-preview');
+      }
+      // Resultado chega via WebSocket (send_done)
+    } catch(e) {
+      toast('Erro de comunicação: ' + e.message, 'ti-alert-circle');
+      show('msg-preview');
+    }
+  }
+
+  function show(id) {
+    ['msg-upload','msg-preview','msg-sending','msg-done'].forEach(i =>
+      document.getElementById(i).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+  }
+
+  return { reset, send, handleFile };
+})();
+
+// ════════════════════════════════════════════════════════
+// WebSocket progress handlers
+// ════════════════════════════════════════════════════════
+function handleSendProgress(msg) {
+  const pct = Math.round((msg.sent / msg.total) * 100);
+  document.getElementById('sendBar').style.width = pct + '%';
+  document.getElementById('sendPct').textContent = pct + '%';
+
+  const row = msg.row;
+  if (!row) return;
+  const ok = row.status === 'sent';
+  const entry = document.createElement('div');
+  entry.className = 'log-e';
+  entry.innerHTML = `
+    <i class="ti ${ok ? 'ti-check log-ok' : 'ti-x log-fail'}"></i>
+    <span class="log-dest">${row.dest}</span>
+    <span class="log-st ${ok ? 'log-ok' : 'log-fail'}">${ok ? 'enviada' : row.error || 'falha'}</span>
+  `;
+  const log = document.getElementById('sendLog');
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function handleSendDone(msg) {
+  document.getElementById('msg-sending').classList.add('hidden');
+  document.getElementById('msg-done').classList.remove('hidden');
+  document.getElementById('doneOk').textContent = msg.sent;
+  document.getElementById('doneFail').textContent = msg.failed;
+  document.getElementById('doneTotal').textContent = msg.total;
+  document.getElementById('doneSub').textContent =
+    `${msg.sent} enviadas com sucesso${msg.failed > 0 ? `, ${msg.failed} falha${msg.failed>1?'s':''}` : ''}`;
+
+  const dashEl = document.getElementById('dashSent');
+  dashEl.textContent = (parseInt(dashEl.textContent) || 0) + msg.sent;
+
+  toast(`${msg.sent} mensagem${msg.sent!==1?'s':''} enviada${msg.sent!==1?'s':''}!`);
+}
+
+// ════════════════════════════════════════════════════════
+// File input & drag-drop
+// ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('csvInput');
+  const drop = document.getElementById('dropZone');
+
+  input.addEventListener('change', () => {
+    if (input.files[0]) Messages.handleFile(input.files[0]);
+  });
+
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) Messages.handleFile(e.dataTransfer.files[0]);
+  });
+
+  connectWS();
+});
 </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ Servidor FastAPI que:
   - Serve a interface HTML em http://localhost:8000
   - Expõe WebSocket em ws://localhost:8000/ws para comunicação em tempo real
   - Controla o ciclo de vida da WASession
+  - Rotas REST para exportação e disparo de mensagens
 """
 
 import asyncio
@@ -14,11 +15,11 @@ from pathlib import Path
 from typing import Set
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from core.wa_session import WASession
+from core.wa_session import WASession, EXPORTS_DIR
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +37,9 @@ connected_clients: Set[WebSocket] = set()
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +94,158 @@ async def health():
 
 
 # ---------------------------------------------------------------------------
+# ROTAS: Exportação de contatos e grupos
+# ---------------------------------------------------------------------------
+
+@app.get("/api/export")
+async def export_contacts(filter: str = "all"):
+    """
+    Exporta contatos e/ou grupos.
+
+    Query param:
+        filter: "all" | "contacts" | "groups"  (default: "all")
+
+    Retorna JSON com { contacts, groups, total, filter }
+    """
+    if session.state != "connected":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sessão não conectada. Estado atual: {session.state}"
+        )
+
+    if filter not in ("all", "contacts", "groups"):
+        raise HTTPException(status_code=422, detail="filter deve ser 'all', 'contacts' ou 'groups'")
+
+    try:
+        result = await session.export_contacts_and_groups(filter_type=filter)
+        return JSONResponse(result)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Erro na exportação: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {e}")
+
+
+@app.get("/api/export/files")
+async def list_export_files():
+    """Lista todos os arquivos de exportação gerados."""
+    files = []
+    for f in sorted(EXPORTS_DIR.iterdir(), reverse=True):
+        if f.is_file():
+            files.append({
+                "name": f.name,
+                "size": f.stat().st_size,
+                "url": f"/api/export/download/{f.name}",
+            })
+    return {"files": files}
+
+
+@app.get("/api/export/download/{filename}")
+async def download_export(filename: str):
+    """Baixa um arquivo de exportação gerado."""
+    # Sanitiza o nome do arquivo
+    safe_name = Path(filename).name
+    file_path = EXPORTS_DIR / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+    return FileResponse(path=str(file_path), filename=safe_name)
+
+
+# ---------------------------------------------------------------------------
+# ROTAS: Disparo de mensagens via CSV
+# ---------------------------------------------------------------------------
+
+@app.post("/api/messages/send")
+async def send_messages(file: UploadFile = File(...)):
+    """
+    Recebe um CSV e dispara mensagens personalizadas.
+
+    Estrutura do CSV:
+        Coluna 0      → destinatário (+55... ou ID@g.us)
+        Colunas 1..N-2 → variáveis para {NomeDaColuna}
+        Coluna N-1    → template da mensagem
+
+    Retorna JSON com { total, sent, failed, skipped, results }
+    """
+    if session.state != "connected":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sessão não conectada. Estado atual: {session.state}"
+        )
+
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=422, detail="Apenas arquivos .csv são aceitos.")
+
+    try:
+        content_bytes = await file.read()
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        # Tenta latin-1 como fallback
+        content = content_bytes.decode("latin-1")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Erro ao ler o arquivo: {e}")
+
+    # Progresso via WebSocket
+    async def progress_cb(sent, total, row_result):
+        await broadcast({
+            "type": "send_progress",
+            "sent": sent,
+            "total": total,
+            "row": row_result,
+        })
+
+    try:
+        result = await session.send_messages_from_csv(content, progress_cb=progress_cb)
+        # Notifica conclusão
+        await broadcast({"type": "send_done", **result})
+        return JSONResponse(result)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Erro no disparo: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {e}")
+
+
+@app.post("/api/messages/validate")
+async def validate_csv(file: UploadFile = File(...)):
+    """
+    Valida a estrutura do CSV sem enviar mensagens.
+    Retorna preview das mensagens que seriam enviadas.
+    """
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=422, detail="Apenas arquivos .csv são aceitos.")
+
+    try:
+        content = (await file.read()).decode("utf-8")
+    except UnicodeDecodeError:
+        content = (await file.read()).decode("latin-1")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Erro ao ler o arquivo: {e}")
+
+    valid, errors = session._parse_csv(content)
+
+    preview = [
+        {
+            "line": r["line"],
+            "dest": r["dest"],
+            "vars": r["vars"],
+            "message": r["message"],
+        }
+        for r in valid[:20]  # Mostra até 20 no preview
+    ]
+
+    return JSONResponse({
+        "valid_count": len(valid),
+        "error_count": len(errors),
+        "var_columns": list(valid[0]["vars"].keys()) if valid else [],
+        "preview": preview,
+        "errors": errors,
+    })
+
+
+# ---------------------------------------------------------------------------
 # WebSocket — comunicação em tempo real com o browser
 # ---------------------------------------------------------------------------
 
@@ -124,30 +280,26 @@ async def websocket_endpoint(ws: WebSocket):
 
 async def handle_client_message(msg: dict):
     """
-    Processa comandos enviados pelo browser.
+    Processa comandos enviados pelo browser via WebSocket.
 
-    Comandos suportados:
-        { "action": "start_session" }   → inicia sessão (se parada)
-        { "action": "stop_session" }    → para sessão
-        { "action": "clear_session" }   → apaga perfil salvo e reinicia
-        { "action": "restart_session" } → para + reinicia sem apagar perfil
+    Comandos:
+        { "action": "start_session" }
+        { "action": "stop_session" }
+        { "action": "clear_session" }
+        { "action": "restart_session" }
     """
     action = msg.get("action")
     logger.info(f"Comando recebido: {action}")
 
     if action == "start_session":
-        # start() já cancela task anterior se existir
         await session.start()
 
     elif action == "stop_session":
         await session.stop()
 
     elif action == "clear_session":
-        # Para a sessão atual (aguarda cancelamento completo)
         await session.stop()
-        # Apaga o perfil salvo do Chromium
         await session.clear_session()
-        # Reseta estado visível para o browser
         session.state = "idle"
         session.qr_base64 = None
         await broadcast({"type": "state", "state": "idle"})
@@ -167,7 +319,6 @@ async def handle_client_message(msg: dict):
 @app.on_event("startup")
 async def startup():
     logger.info("Servidor iniciado. Acesse http://localhost:8000")
-    # Inicia a sessão automaticamente ao ligar o servidor
     await session.start()
 
 
