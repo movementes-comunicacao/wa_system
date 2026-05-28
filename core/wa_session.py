@@ -171,8 +171,8 @@ class WASession:
             args=[
                 "--no-sandbox",
                 "--disable-blink-features=AutomationControlled",
-                "--window-position=-32000,-32000",  # janela fora da tela (invisível)
-                "--window-size=1280,800",
+                # "--window-position=-32000,-32000",  # janela fora da tela (invisível)
+                # "--window-size=1280,800",
                 "--disable-extensions",
                 "--mute-audio",
             ],
@@ -484,59 +484,146 @@ class WASession:
         rows = await page.query_selector_all(SEL_CONTACT_ROW)
         logger.info(f"[WASession] {len(rows)} linhas de chat encontradas.")
 
-        for row in rows:
+        # Itens especiais a pular
+        SKIP_NAMES = {"arquivadas", "archived", "favorites", "favoritos"}
+
+        logger.info(f"[WASession] Processando {len(rows)} linhas — clicando em cada uma para detectar tipo e número...")
+        for idx, row in enumerate(rows):
             try:
-                # Extrai dados via JS para evitar texto extra (unread count etc.)
-                row_data = await row.evaluate("""el => {
-                    // Nome: só o span do título, sem contar badges de mensagem
+                # Extrai nome e detecta tipo SEM clicar primeiro
+                row_info = await row.evaluate("""el => {
                     const titleEl = el.querySelector('[data-testid="cell-frame-title"] span[title]')
                                  || el.querySelector('[data-testid="cell-frame-title"] span')
                                  || el.querySelector('[data-testid="cell-frame-title"]');
                     const name = titleEl ? (titleEl.getAttribute('title') || titleEl.innerText || '').trim() : '';
 
-                    // Subtítulo
+                    // Detecta grupo: avatar de grupo tem data-testid "default-group-refreshed"
+                    // OU o item tem data-testid "archive-refreshed" (item especial Arquivadas)
+                    const isArchive = !!el.querySelector('[data-testid="archive-refreshed"]');
+                    const isGroupAvatar = !!el.querySelector('[data-testid="default-group-refreshed"]')
+                                      || !!el.querySelector('[data-testid="group-icon"]');
+
+                    // Tenta subtítulo para pegar número direto
                     const subEl = el.querySelector('[data-testid="cell-frame-secondary"]');
                     const subtitle = subEl ? subEl.innerText.trim() : '';
 
-                    // Detecta grupo pelo ícone SVG com data-testid de grupo
-                    const groupIcon = el.querySelector('[data-testid="default-group-refreshed"]')
-                                   || el.querySelector('[data-testid="subgroup-identity"]');
-                    const isGroup = !!groupIcon;
-
-                    // Número de não lidos (para ignorar do nome)
-                    const unreadEl = el.querySelector('[data-testid="icon-unread-count"]');
-                    const unread = unreadEl ? unreadEl.innerText.trim() : '';
-
-                    return { name, subtitle, isGroup, unread };
+                    return { name, isArchive, isGroupAvatar, subtitle };
                 }""")
 
-                name = row_data.get("name", "").strip()
-                subtitle = row_data.get("subtitle", "").strip()
-                is_group = row_data.get("isGroup", False)
-
-                # Remove prefixo de unread count do nome se vier junto
-                if name:
-                    name = re.sub(r'^\d+\s+mensagens?\s+não\s+lida[s]?\s*', '', name, flags=re.IGNORECASE).strip()
-                    name = re.sub(r'^\d+\s*$', '', name).strip()
-
+                name = row_info.get("name", "")
+                name = re.sub(r'^\d+\s+mensagens?\s+n[ãa]o\s+lida[s]?\s*', '', name, flags=re.IGNORECASE).strip()
+                name = re.sub(r'^\d+\s*$', '', name).strip()
                 if not name:
                     continue
 
+                # Pula itens especiais
+                if row_info.get("isArchive") or name.lower() in SKIP_NAMES:
+                    logger.info(f"[WASession] [{idx+1}/{len(rows)}] PULANDO item especial: {name}")
+                    continue
+
+                # Se já detectou grupo pelo avatar, não precisa clicar
+                if row_info.get("isGroupAvatar"):
+                    groups.append({"name": name, "phone": "", "type": "group"})
+                    logger.info(f"[WASession] [{idx+1}/{len(rows)}] GRUPO (avatar): {name}")
+                    continue
+
+                # Tenta pegar número direto do subtítulo da lista
+                subtitle = row_info.get("subtitle", "")
+                phone_from_subtitle = self._extract_phone_from_text(subtitle) or ""
+
+                # Se já tem número no subtítulo da lista, é contato — não precisa clicar
+                if phone_from_subtitle:
+                    contacts.append({"name": name, "phone": phone_from_subtitle, "type": "contact"})
+                    logger.info(f"[WASession] [{idx+1}/{len(rows)}] CONTATO (rápido): {name} | {phone_from_subtitle}")
+                    continue
+
+                # Clica para abrir o chat
+                await row.click()
+                await asyncio.sleep(1.0)
+
+                # Abre o painel de info clicando no cabeçalho
+                try:
+                    hdr = await page.query_selector('[data-testid="conversation-header"]')
+                    if hdr:
+                        await hdr.click()
+                        await asyncio.sleep(1.5)
+                except Exception:
+                    await asyncio.sleep(0.5)
+
+                # Lê o painel de info para determinar tipo E número em uma única chamada.
+                # group-info-header  → é grupo com certeza
+                # contact-info-header → é contato com certeza
+                panel_data = await page.evaluate("""() => {
+                    const panel = document.querySelector('[data-testid="chat-info-drawer"]')
+                               || document.querySelector('[data-testid="drawer-right"]')
+                               || document.querySelector('[data-testid="app-viewer"]');
+
+                    if (!panel) return { isGroup: false, isContact: false, phone: null };
+
+                    const isGroup   = !!panel.querySelector('[data-testid="group-info-header"]');
+                    const isContact = !!panel.querySelector('[data-testid="contact-info-header"]');
+
+                    // Extrai número apenas para contatos
+                    let phone = null;
+                    if (isContact) {
+                        // 1. Subtítulo direto (onde o WA coloca o número)
+                        const sub = panel.querySelector('[data-testid="contact-info-subtitle"]')
+                                 || panel.querySelector('[data-testid="contact-info-subtitle selectable-text"]');
+                        if (sub) {
+                            const t = sub.innerText.trim();
+                            if (/\+?\d[\d\s\-()\u00a0]{7,}/.test(t)) { phone = t; }
+                        }
+
+                        // 2. Varre folhas do painel buscando número internacional exato
+                        if (!phone) {
+                            const leaves = [...panel.querySelectorAll('span, div, p')]
+                                .filter(el => el.childElementCount === 0)
+                                .map(el => el.innerText.trim())
+                                .filter(t => t.length > 0);
+                            for (const t of leaves) {
+                                if (/^\+\d[\d\s\-()\u00a0]{7,}$/.test(t)) { phone = t; break; }
+                            }
+                            // 3. Busca relaxada
+                            if (!phone) {
+                                for (const t of leaves) {
+                                    const m = t.match(/\+?\d[\d\s\-()\u00a0]{8,}/);
+                                    if (m) { phone = m[0].trim(); break; }
+                                }
+                            }
+                        }
+                    }
+
+                    return { isGroup, isContact, phone };
+                }""")
+
+                await page.keyboard.press("Escape")
+                await asyncio.sleep(0.4)
+
+                is_group   = panel_data.get("isGroup", False)
+                is_contact = panel_data.get("isContact", False)
+                phone      = panel_data.get("phone") or ""
+
+                # Fallback: se o painel não abriu, usa URL como último recurso
+                if not is_group and not is_contact:
+                    url = page.url
+                    is_group = "@g.us" in url
+                    is_contact = not is_group
+                    logger.info(f"[WASession] Painel não detectado para '{name}', usando URL: {'grupo' if is_group else 'contato'}")
+
+                if phone:
+                    logger.info(f"[WASession] Número extraído do painel: {phone}")
+                elif is_contact:
+                    logger.info(f"[WASession] Número não encontrado no painel para: {name}")
+
                 if is_group:
-                    groups.append({
-                        "name": name,
-                        "phone": "",
-                        "type": "group",
-                    })
+                    groups.append({"name": name, "phone": "", "type": "group"})
+                    logger.info(f"[WASession] [{idx+1}/{len(rows)}] GRUPO: {name}")
                 else:
-                    phone = self._extract_phone_from_text(subtitle) or ""
-                    contacts.append({
-                        "name": name,
-                        "phone": phone,
-                        "type": "contact",
-                    })
+                    contacts.append({"name": name, "phone": phone, "type": "contact"})
+                    logger.info(f"[WASession] [{idx+1}/{len(rows)}] CONTATO: {name} | {phone or '(sem número)'}")
+
             except Exception as e:
-                logger.debug(f"[WASession] Erro ao processar linha: {e}")
+                logger.debug(f"[WASession] Erro linha {idx}: {e}")
                 continue
 
         # Aplica filtro
