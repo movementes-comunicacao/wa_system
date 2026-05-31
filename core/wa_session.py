@@ -644,7 +644,7 @@ class WASession:
         logger.info(f"[WASession] Exportação concluída: {len(contacts)} contatos, {len(groups)} grupos.")
         return result
 
-    async def _scroll_chat_list(self, page: Page, scrolls: int = 15):
+    async def _scroll_chat_list(self, page: Page, scrolls: int = 100):
         """Faz scroll na lista de chats para carregar mais itens."""
         try:
             # Tenta o painel correto (data-testid="chat-list" existe conforme diagnóstico)
@@ -794,12 +794,10 @@ class WASession:
                 row_result["error"] = str(e)
                 failed += 1
                 logger.warning(f"[WASession] ✗ [{line}] → {dest}: {e}")
-
             results.append(row_result)
 
             if progress_cb:
                 await progress_cb(sent + failed, total, row_result)
-
             # Delay entre envios (evita ban)
             await asyncio.sleep(1.5)
 
@@ -910,9 +908,7 @@ class WASession:
             phone = re.sub(r'[^\d+]', '', dest)
             if not phone.startswith('+'):
                 phone = '+' + phone
-            url = f"{WA_URL}/send?phone={phone}"
-            await page.goto(url, wait_until="domcontentloaded", timeout=15_000)
-            await asyncio.sleep(2)
+            await self._open_chat_by_search(dest)
 
         # Aguarda campo de texto da conversa
         try:
@@ -944,14 +940,12 @@ class WASession:
         page = self._page
         try:
             # Navega para a raiz antes de buscar
-            await page.goto(WA_URL, wait_until="domcontentloaded", timeout=15_000)
+            # await page.goto(WA_URL, wait_until="domcontentloaded", timeout=15_000)
             await asyncio.sleep(1.5)
-
-            # Clica no container de busca e depois no input editável
-            await page.click('[data-testid="chat-list-search-container"]')
-            await asyncio.sleep(0.5)
-            search_input = await page.query_selector('div[contenteditable="true"][data-tab]') or                            await page.query_selector('[data-testid="chat-list-search-container"] div[contenteditable]')
+            search_input = await page.query_selector('//input[@role="textbox"]')
             if search_input:
+                await search_input.fill("")
+                await asyncio.sleep(1.0)
                 await search_input.fill(dest)
             else:
                 await page.keyboard.type(dest)
