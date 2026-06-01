@@ -16,3 +16,4 @@ __pycache__/
 # Pastas de IDEs (opcional)
 .vscode/
 .idea/
+__pycache__/
