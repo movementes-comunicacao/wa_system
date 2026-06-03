@@ -32,6 +32,7 @@ BASE_DIR = Path(__file__).parent.parent
 SESSION_DIR = BASE_DIR / "data" / "session"
 EXPORTS_DIR = BASE_DIR / "data" / "exports"
 LOGS_DIR = BASE_DIR / "data" / "logs"
+HISTORY_FILE = EXPORTS_DIR.parent / "export_history.json"   # data/export_history.json
 
 for _d in (SESSION_DIR, EXPORTS_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
@@ -415,24 +416,79 @@ class WASession:
         self._playwright = None
 
     # ------------------------------------------------------------------
+    # FEATURE: Histórico de exportações (evita reprocessar já coletados)
+    # ------------------------------------------------------------------
+
+    def _load_history(self) -> Dict[str, Any]:
+        """
+        Carrega o histórico persistido de contatos/grupos já exportados.
+
+        Estrutura do arquivo JSON:
+        {
+          "contacts": { "<nome_normalizado>": { "name": str, "phone": str, "first_seen": int } },
+          "groups":   { "<nome_normalizado>": { "name": str, "first_seen": int } }
+        }
+        """
+        if HISTORY_FILE.exists():
+            try:
+                return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            except Exception as e:
+                logger.warning(f"[WASession] Histórico corrompido, recriando: {e}")
+        return {"contacts": {}, "groups": {}}
+
+    def _save_history(self, history: Dict[str, Any]):
+        """Persiste o histórico de volta ao arquivo JSON."""
+        try:
+            HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            HISTORY_FILE.write_text(
+                json.dumps(history, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.error(f"[WASession] Erro ao salvar histórico: {e}")
+
+    @staticmethod
+    def _history_key(name: str) -> str:
+        """Chave normalizada para lookup no histórico (lower-case, sem espaços extras)."""
+        return re.sub(r'\s+', ' ', name.strip().lower())
+
+    def clear_export_history(self):
+        """Apaga o histórico de exportações (força re-exportar tudo na próxima vez)."""
+        if HISTORY_FILE.exists():
+            HISTORY_FILE.unlink()
+            logger.info("[WASession] Histórico de exportações apagado.")
+
+    def get_export_history_stats(self) -> Dict[str, int]:
+        """Retorna estatísticas do histórico atual."""
+        h = self._load_history()
+        return {
+            "contacts_in_history": len(h.get("contacts", {})),
+            "groups_in_history":   len(h.get("groups", {})),
+        }
+
+    # ------------------------------------------------------------------
     # FEATURE: Exportar contatos e grupos
     # ------------------------------------------------------------------
 
     async def export_contacts_and_groups(
-        self, filter_type: str = "all"
+        self, filter_type: str = "all", skip_seen: bool = True
     ) -> Dict[str, Any]:
         """
         Exporta contatos e/ou grupos do WhatsApp Web aberto.
 
         Args:
             filter_type: "all" | "contacts" | "groups"
+            skip_seen:   Se True (padrão), pula contatos/grupos já exportados
+                         em sessões anteriores (usa data/export_history.json).
 
         Returns:
             {
-              "contacts": [...],
-              "groups":   [...],
-              "total":    int,
-              "filter":   str,
+              "contacts":    [...],
+              "groups":      [...],
+              "total":       int,
+              "filter":      str,
+              "new_count":   int,   ← itens realmente novos nesta execução
+              "skipped_seen": int,  ← pulados por já estarem no histórico
             }
 
         Cada contato: { "name": str, "phone": str, "type": "contact" }
@@ -444,8 +500,16 @@ class WASession:
         page = self._page
         contacts: List[Dict] = []
         groups: List[Dict] = []
+        skipped_seen = 0
 
-        logger.info(f"[WASession] Iniciando exportação (filter={filter_type})...")
+        # Carrega histórico uma única vez antes do loop
+        history = self._load_history() if skip_seen else {"contacts": {}, "groups": {}}
+
+        logger.info(
+            f"[WASession] Iniciando exportação (filter={filter_type}, "
+            f"skip_seen={skip_seen}, "
+            f"histórico: {len(history['contacts'])} contatos / {len(history['groups'])} grupos)..."
+        )
 
         # Diagnóstico: loga data-testid disponíveis na página
         try:
@@ -521,9 +585,24 @@ class WASession:
                     logger.info(f"[WASession] [{idx+1}/{len(rows)}] PULANDO item especial: {name}")
                     continue
 
+                # ── Histórico: pula se já foi exportado antes ──────────
+                if skip_seen:
+                    hkey = self._history_key(name)
+                    in_contacts = hkey in history["contacts"]
+                    in_groups   = hkey in history["groups"]
+                    if in_contacts or in_groups:
+                        skipped_seen += 1
+                        logger.info(
+                            f"[WASession] [{idx+1}/{len(rows)}] JÁ EXPORTADO (histórico): {name}"
+                        )
+                        continue
+
                 # Se já detectou grupo pelo avatar, não precisa clicar
                 if row_info.get("isGroupAvatar"):
                     groups.append({"name": name, "phone": "", "type": "group"})
+                    history["groups"][self._history_key(name)] = {
+                        "name": name, "first_seen": int(time.time())
+                    }
                     logger.info(f"[WASession] [{idx+1}/{len(rows)}] GRUPO (avatar): {name}")
                     continue
 
@@ -534,6 +613,9 @@ class WASession:
                 # Se já tem número no subtítulo da lista, é contato — não precisa clicar
                 if phone_from_subtitle:
                     contacts.append({"name": name, "phone": phone_from_subtitle, "type": "contact"})
+                    history["contacts"][self._history_key(name)] = {
+                        "name": name, "phone": phone_from_subtitle, "first_seen": int(time.time())
+                    }
                     logger.info(f"[WASession] [{idx+1}/{len(rows)}] CONTATO (rápido): {name} | {phone_from_subtitle}")
                     continue
 
@@ -617,9 +699,15 @@ class WASession:
 
                 if is_group:
                     groups.append({"name": name, "phone": "", "type": "group"})
+                    history["groups"][self._history_key(name)] = {
+                        "name": name, "first_seen": int(time.time())
+                    }
                     logger.info(f"[WASession] [{idx+1}/{len(rows)}] GRUPO: {name}")
                 else:
                     contacts.append({"name": name, "phone": phone, "type": "contact"})
+                    history["contacts"][self._history_key(name)] = {
+                        "name": name, "phone": phone, "first_seen": int(time.time())
+                    }
                     logger.info(f"[WASession] [{idx+1}/{len(rows)}] CONTATO: {name} | {phone or '(sem número)'}")
 
             except Exception as e:
@@ -632,16 +720,48 @@ class WASession:
         elif filter_type == "groups":
             contacts = []
 
+        new_count = len(contacts) + len(groups)
+
         result = {
-            "contacts": contacts,
-            "groups": groups,
-            "total": len(contacts) + len(groups),
-            "filter": filter_type,
+            "contacts":     contacts,
+            "groups":       groups,
+            "total":        new_count,
+            "filter":       filter_type,
+            "new_count":    new_count,
+            "skipped_seen": skipped_seen,
         }
 
-        # Persiste em arquivo
-        await self._save_export(result, filter_type)
-        logger.info(f"[WASession] Exportação concluída: {len(contacts)} contatos, {len(groups)} grupos.")
+        # Persiste histórico atualizado
+        if skip_seen:
+            self._save_history(history)
+
+        has_new = new_count > 0
+
+        # Só persiste em arquivo se houver itens novos
+        saved_files = await self._save_export(result, filter_type)
+
+        logger.info(
+            f"[WASession] Exportação concluída: {len(contacts)} contatos, "
+            f"{len(groups)} grupos, {skipped_seen} pulados (já no histórico)."
+        )
+
+        # Lista todas as exportações anteriores para o frontend disponibilizar
+        previous_exports = self.list_export_files()
+
+        result.update({
+            "has_new":          has_new,
+            "saved_files":      saved_files,
+            "previous_exports": previous_exports,
+            "message": (
+                f"{new_count} novo(s) encontrado(s)."
+                if has_new
+                else (
+                    f"Nenhum contato novo. "
+                    f"{skipped_seen} já estavam no histórico. "
+                    f"Use skip_seen=false para re-exportar tudo."
+                )
+            ),
+        })
         return result
 
     async def _scroll_chat_list(self, page: Page, scrolls: int = 100):
@@ -690,8 +810,20 @@ class WASession:
         slug = re.sub(r'[^a-z0-9]', '_', name.lower())
         return slug[:40]
 
-    async def _save_export(self, data: Dict, filter_type: str):
-        """Salva exportação em JSON e CSV."""
+    async def _save_export(self, data: Dict, filter_type: str) -> Dict[str, Optional[str]]:
+        """
+        Salva exportação em JSON e CSV.
+
+        Retorna { "json": path_str | None, "csv": path_str | None }.
+        Se não houver itens novos (new_count == 0), nenhum arquivo é criado.
+        """
+        rows = data["contacts"] + data["groups"]
+
+        # Nada novo → não gera arquivo
+        if not rows:
+            logger.info("[WASession] Nenhum item novo — arquivo de exportação não gerado.")
+            return {"json": None, "csv": None}
+
         ts = int(time.time())
         prefix = EXPORTS_DIR / f"export_{filter_type}_{ts}"
 
@@ -701,16 +833,45 @@ class WASession:
 
         # CSV — achata contatos + grupos numa única lista
         csv_path = prefix.with_suffix(".csv")
-        rows = data["contacts"] + data["groups"]
-        if rows:
-            fieldnames = ["name", "phone", "type"]
-            # utf-8-sig = BOM para Excel abrir sem encoding quebrado
-            with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-                writer.writeheader()
-                writer.writerows({f: row.get(f, "") for f in fieldnames} for row in rows)
+        fieldnames = ["name", "phone", "type"]
+        # utf-8-sig = BOM para Excel abrir sem encoding quebrado
+        with csv_path.open("w", newline="", encoding="utf-8-sig") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows({fn: row.get(fn, "") for fn in fieldnames} for row in rows)
 
         logger.info(f"[WASession] Exportação salva em {prefix}.*")
+        return {"json": str(json_path), "csv": str(csv_path)}
+
+    def list_export_files(self) -> List[Dict]:
+        """
+        Retorna lista de todos os arquivos de exportação gerados, do mais recente ao mais antigo.
+        Cada item: { name, size, url, timestamp, filter_type, ext }
+        """
+        files = []
+        if not EXPORTS_DIR.exists():
+            return files
+        for f in sorted(EXPORTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not f.is_file():
+                continue
+            # Extrai metadados do nome: export_<filter>_<ts>.<ext>
+            parts = f.stem.split("_")   # ["export", filter, ts]
+            try:
+                ts = int(parts[-1])
+                filter_type = "_".join(parts[1:-1])
+            except (ValueError, IndexError):
+                ts = int(f.stat().st_mtime)
+                filter_type = "unknown"
+
+            files.append({
+                "name":        f.name,
+                "ext":         f.suffix.lstrip("."),
+                "filter_type": filter_type,
+                "size":        f.stat().st_size,
+                "timestamp":   ts,
+                "url":         f"/api/export/download/{f.name}",
+            })
+        return files
 
     # ------------------------------------------------------------------
     # FEATURE: Enviar mensagens via CSV

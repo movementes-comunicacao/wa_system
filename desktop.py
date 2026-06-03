@@ -5,6 +5,16 @@ import webview
 
 # Importa a instância 'app' do FastAPI diretamente do seu server.py
 from server import app 
+import subprocess, sys
+from playwright.sync_api import sync_playwright
+
+try:
+    with sync_playwright() as p:
+        p.chromium.launch().close()  # testa se o Chromium está disponível
+except Exception:
+    print("Instalando Chromium (apenas na primeira vez)...")
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
+
 
 def start_api_server():
     """

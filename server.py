@@ -98,14 +98,16 @@ async def health():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/export")
-async def export_contacts(filter: str = "all"):
+async def export_contacts(filter: str = "all", skip_seen: bool = True):
     """
     Exporta contatos e/ou grupos.
 
-    Query param:
-        filter: "all" | "contacts" | "groups"  (default: "all")
+    Query params:
+        filter:    "all" | "contacts" | "groups"  (default: "all")
+        skip_seen: true (default) → pula contatos já exportados anteriormente
+                   false → exporta todos, ignorando o histórico
 
-    Retorna JSON com { contacts, groups, total, filter }
+    Retorna JSON com { contacts, groups, total, filter, new_count, skipped_seen }
     """
     if session.state != "connected":
         raise HTTPException(
@@ -117,7 +119,19 @@ async def export_contacts(filter: str = "all"):
         raise HTTPException(status_code=422, detail="filter deve ser 'all', 'contacts' ou 'groups'")
 
     try:
-        result = await session.export_contacts_and_groups(filter_type=filter)
+        result = await session.export_contacts_and_groups(filter_type=filter, skip_seen=skip_seen)
+
+        # Notifica todos os browsers conectados via WebSocket
+        await broadcast({
+            "type":             "export_done",
+            "has_new":          result["has_new"],
+            "new_count":        result["new_count"],
+            "skipped_seen":     result["skipped_seen"],
+            "message":          result["message"],
+            "saved_files":      result.get("saved_files", {}),
+            "previous_exports": result.get("previous_exports", []),
+        })
+
         return JSONResponse(result)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -128,16 +142,28 @@ async def export_contacts(filter: str = "all"):
 
 @app.get("/api/export/files")
 async def list_export_files():
-    """Lista todos os arquivos de exportação gerados."""
-    files = []
-    for f in sorted(EXPORTS_DIR.iterdir(), reverse=True):
-        if f.is_file():
-            files.append({
-                "name": f.name,
-                "size": f.stat().st_size,
-                "url": f"/api/export/download/{f.name}",
-            })
-    return {"files": files}
+    """
+    Lista todos os arquivos de exportação gerados, do mais recente ao mais antigo.
+    Cada item inclui: name, ext, filter_type, size, timestamp, url.
+    """
+    return {"files": session.list_export_files()}
+
+
+@app.get("/api/export/history")
+async def get_export_history():
+    """Retorna estatísticas do histórico de exportações."""
+    stats = session.get_export_history_stats()
+    return JSONResponse(stats)
+
+
+@app.delete("/api/export/history")
+async def clear_export_history():
+    """
+    Apaga o histórico de exportações.
+    Na próxima chamada a /api/export todos os contatos serão exportados novamente.
+    """
+    session.clear_export_history()
+    return {"status": "ok", "message": "Histórico de exportações apagado."}
 
 
 @app.get("/api/export/download/{filename}")
