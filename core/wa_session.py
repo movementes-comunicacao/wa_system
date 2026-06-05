@@ -77,6 +77,7 @@ class WASession:
         self.qr_base64: Optional[str] = None
         self.phone_number: Optional[str] = None
         self.error_msg: Optional[str] = None
+        self.show_browser: bool = False
 
         self._playwright: Optional[Playwright] = None
         self._context: Optional[BrowserContext] = None
@@ -95,6 +96,10 @@ class WASession:
 
     def on_qr(self, cb: Callable):
         self._on_qr = cb
+
+    def set_browser_visibility(self, show_browser: bool):
+        self.show_browser = bool(show_browser)
+        logger.info(f"[WASession] Modo de browser visível: {self.show_browser}")
 
     async def _emit_state(self, state: str):
         self.state = state
@@ -168,7 +173,7 @@ class WASession:
 
         self._context = await self._playwright.chromium.launch_persistent_context(
             str(SESSION_DIR),
-            headless=False,          # Windows: headless=True quebra WebGL/canvas do WA
+            headless=not self.show_browser,
             args=[
                 "--no-sandbox",
                 "--disable-blink-features=AutomationControlled",

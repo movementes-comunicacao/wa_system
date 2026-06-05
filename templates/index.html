@@ -30,6 +30,13 @@
     .btn-g:hover{border-color:var(--bdrs);color:var(--tx)}
     .btn-danger { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; background:var(--danger-bg); color:var(--danger); border:.5px solid rgba(224,82,82,.3); border-radius:var(--r); padding:9px 16px; cursor:pointer; transition:opacity .2s; }
     .btn-danger:hover{opacity:.8}
+    /* ── Initial mode screen ── */
+    #mode-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:2rem 1.5rem; background:var(--sf); z-index:120; }
+    .mode-card { position:relative; z-index:1; width:100%; max-width:500px; background:var(--sf2); border:1px solid var(--bdr); border-radius:12px; padding:1.75rem; display:flex; flex-direction:column; gap:1rem; }
+    .mode-title { font-family:var(--mono); font-size:13px; letter-spacing:.07em; text-transform:uppercase; color:var(--txm); }
+    .mode-h { font-family:var(--mono); font-size:16px; font-weight:500; color:var(--tx); }
+    .mode-desc { font-size:13px; color:var(--txm); line-height:1.55; }
+    .mode-actions { display:flex; gap:10px; flex-wrap:wrap; }
 
     /* ── Auth screen ── */
     #auth-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:2rem 1.5rem; background:var(--sf); z-index:100; transition:opacity .4s,visibility .4s; }
@@ -256,8 +263,28 @@
 </head>
 <body>
 
+<!-- ══════════════════ INITIAL MODE SELECTION ══════════════════ -->
+<div id="mode-screen">
+  <div class="grid-bg"></div>
+  <div class="mode-card">
+    <div class="mode-title">// inicialização</div>
+    <div class="mode-h">Deseja ver o navegador do Playwright?</div>
+    <div class="mode-desc">
+      Escolha se o Chromium deve abrir visível na tela durante a sessão ou ficar oculto (headless).
+    </div>
+    <div class="mode-actions">
+      <button class="btn-p" onclick="selectBrowserMode(true)">
+        <i class="ti ti-eye"></i> mostrar navegador
+      </button>
+      <button class="btn-g" onclick="selectBrowserMode(false)">
+        <i class="ti ti-eye-off"></i> manter oculto
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════ AUTH ══════════════════ -->
-<div id="auth-screen">
+<div id="auth-screen" class="hidden">
   <div class="grid-bg"></div>
   <div class="auth-box">
     <div class="brand">
@@ -305,7 +332,7 @@
         <button class="btn-danger" id="btnClear" onclick="sendCmd('clear_session')">
           <i class="ti ti-trash"></i> limpar sessão
         </button>
-        <button class="btn-g" onclick="sendCmd('restart_session')">
+        <button class="btn-g" onclick="restartSession()">
           <i class="ti ti-refresh"></i> reiniciar
         </button>
       </div>
@@ -578,6 +605,8 @@
 let ws;
 let wsRetries = 0;
 const MAX_RETRIES = 10;
+let browserVisibilityChoice = null;
+let pendingStartMode = null;
 
 function connectWS() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -585,6 +614,10 @@ function connectWS() {
   ws.onopen = () => {
     wsRetries = 0;
     console.log('[WS] conectado');
+    if (pendingStartMode !== null) {
+      sendCmd('start_session', { show_browser: pendingStartMode });
+      pendingStartMode = null;
+    }
   };
 
   ws.onmessage = e => {
@@ -604,10 +637,34 @@ function connectWS() {
   ws.onerror = err => console.error('[WS] erro:', err);
 }
 
-function sendCmd(action) {
+function sendCmd(action, payload = {}) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ action }));
+    ws.send(JSON.stringify({ action, ...payload }));
   }
+}
+
+function selectBrowserMode(showBrowser) {
+  browserVisibilityChoice = !!showBrowser;
+  const modeEl = document.getElementById('mode-screen');
+  const authEl = document.getElementById('auth-screen');
+  modeEl.classList.add('hidden');
+  authEl.classList.remove('hidden');
+  authEl.style.display = '';
+  authEl.classList.remove('hiding');
+  resetQRFrame();
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    sendCmd('start_session', { show_browser: browserVisibilityChoice });
+  } else {
+    pendingStartMode = browserVisibilityChoice;
+  }
+}
+
+function restartSession() {
+  const payload = typeof browserVisibilityChoice === 'boolean'
+    ? { show_browser: browserVisibilityChoice }
+    : {};
+  sendCmd('restart_session', payload);
 }
 
 // ════════════════════════════════════════════════════════
@@ -630,10 +687,16 @@ function handleExportDone(msg) {
 
 function handleState(msg) {
   const state = msg.state;
+  if (typeof msg.show_browser === 'boolean') {
+    browserVisibilityChoice = msg.show_browser;
+  }
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusTxt');
   const alert = document.getElementById('alertPanel');
   const scanLine = document.getElementById('scanLine');
+  const modeEl = document.getElementById('mode-screen');
+  const authEl = document.getElementById('auth-screen');
+  const appEl = document.getElementById('app-screen');
 
   dot.className = 'status-dot';
   txt.className = 'status-txt';
@@ -670,25 +733,37 @@ function handleState(msg) {
 
   if (state === 'connected') {
     // Transição para o app
-    const authEl = document.getElementById('auth-screen');
-    const appEl = document.getElementById('app-screen');
+    modeEl.classList.add('hidden');
     authEl.classList.add('hiding');
+    authEl.classList.remove('hidden');
     appEl.classList.remove('hidden');
     goPage('dashboard', document.querySelector('.nav-item[onclick*=dashboard]'));
     if (msg.phone) {
       document.getElementById('sidePhone').textContent = msg.phone;
     }
-    setTimeout(() => authEl.style.display = 'none', 400);
+    setTimeout(() => {
+      authEl.style.display = 'none';
+      authEl.classList.add('hidden');
+    }, 400);
   }
 
   if (state === 'idle' || state === 'stopped') {
-    // Volta para autenticação
-    const authEl = document.getElementById('auth-screen');
-    const appEl = document.getElementById('app-screen');
+    // Volta para tela inicial/auth
     authEl.style.display = '';
     authEl.classList.remove('hiding');
     appEl.classList.add('hidden');
     resetQRFrame();
+    if (browserVisibilityChoice === null) {
+      modeEl.classList.remove('hidden');
+      authEl.classList.add('hidden');
+    } else {
+      modeEl.classList.add('hidden');
+      authEl.classList.remove('hidden');
+    }
+  } else if (state !== 'connected') {
+    modeEl.classList.add('hidden');
+    authEl.classList.remove('hidden');
+    authEl.style.display = '';
   }
 }
 
