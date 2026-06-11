@@ -98,15 +98,7 @@ async def health():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/export")
-async def export_contacts(filter: str = "all"):
-    """
-    Exporta contatos e/ou grupos.
-
-    Query param:
-        filter: "all" | "contacts" | "groups"  (default: "all")
-
-    Retorna JSON com { contacts, groups, total, filter }
-    """
+async def export_contacts(filter: str = "all", skip_seen: bool = True):
     if session.state != "connected":
         raise HTTPException(
             status_code=400,
@@ -117,7 +109,18 @@ async def export_contacts(filter: str = "all"):
         raise HTTPException(status_code=422, detail="filter deve ser 'all', 'contacts' ou 'groups'")
 
     try:
-        result = await session.export_contacts_and_groups(filter_type=filter)
+        result = await session.export_contacts_and_groups(filter_type=filter, skip_seen=skip_seen)
+
+        await broadcast({
+            "type":             "export_done",
+            "has_new":          result["has_new"],
+            "new_count":        result["new_count"],
+            "skipped_seen":     result["skipped_seen"],
+            "message":          result["message"],
+            "saved_files":      result.get("saved_files", {}),
+            "previous_exports": result.get("previous_exports", []),
+        })
+
         return JSONResponse(result)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -128,22 +131,23 @@ async def export_contacts(filter: str = "all"):
 
 @app.get("/api/export/files")
 async def list_export_files():
-    """Lista todos os arquivos de exportação gerados."""
-    files = []
-    for f in sorted(EXPORTS_DIR.iterdir(), reverse=True):
-        if f.is_file():
-            files.append({
-                "name": f.name,
-                "size": f.stat().st_size,
-                "url": f"/api/export/download/{f.name}",
-            })
-    return {"files": files}
+    return {"files": session.list_export_files()}
+
+
+@app.get("/api/export/history")
+async def get_export_history():
+    stats = session.get_export_history_stats()
+    return JSONResponse(stats)
+
+
+@app.delete("/api/export/history")
+async def clear_export_history():
+    session.clear_export_history()
+    return {"status": "ok", "message": "Histórico de exportações apagado."}
 
 
 @app.get("/api/export/download/{filename}")
 async def download_export(filename: str):
-    """Baixa um arquivo de exportação gerado."""
-    # Sanitiza o nome do arquivo
     safe_name = Path(filename).name
     file_path = EXPORTS_DIR / safe_name
     if not file_path.exists() or not file_path.is_file():
@@ -157,16 +161,6 @@ async def download_export(filename: str):
 
 @app.post("/api/messages/send")
 async def send_messages(file: UploadFile = File(...)):
-    """
-    Recebe um CSV e dispara mensagens personalizadas.
-
-    Estrutura do CSV:
-        Coluna 0      → destinatário (+55... ou ID@g.us)
-        Colunas 1..N-2 → variáveis para {NomeDaColuna}
-        Coluna N-1    → template da mensagem
-
-    Retorna JSON com { total, sent, failed, skipped, results }
-    """
     if session.state != "connected":
         raise HTTPException(
             status_code=400,
@@ -180,12 +174,10 @@ async def send_messages(file: UploadFile = File(...)):
         content_bytes = await file.read()
         content = content_bytes.decode("utf-8")
     except UnicodeDecodeError:
-        # Tenta latin-1 como fallback
         content = content_bytes.decode("latin-1")
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Erro ao ler o arquivo: {e}")
 
-    # Progresso via WebSocket
     async def progress_cb(sent, total, row_result):
         await broadcast({
             "type": "send_progress",
@@ -196,7 +188,6 @@ async def send_messages(file: UploadFile = File(...)):
 
     try:
         result = await session.send_messages_from_csv(content, progress_cb=progress_cb)
-        # Notifica conclusão
         await broadcast({"type": "send_done", **result})
         return JSONResponse(result)
     except ValueError as e:
@@ -210,10 +201,6 @@ async def send_messages(file: UploadFile = File(...)):
 
 @app.post("/api/messages/validate")
 async def validate_csv(file: UploadFile = File(...)):
-    """
-    Valida a estrutura do CSV sem enviar mensagens.
-    Retorna preview das mensagens que seriam enviadas.
-    """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=422, detail="Apenas arquivos .csv são aceitos.")
 
@@ -233,7 +220,7 @@ async def validate_csv(file: UploadFile = File(...)):
             "vars": r["vars"],
             "message": r["message"],
         }
-        for r in valid[:20]  # Mostra até 20 no preview
+        for r in valid[:20]
     ]
 
     return JSONResponse({
@@ -255,7 +242,6 @@ async def websocket_endpoint(ws: WebSocket):
     connected_clients.add(ws)
     logger.info(f"Cliente WebSocket conectado. Total: {len(connected_clients)}")
 
-    # Envia estado atual imediatamente ao conectar
     await ws.send_text(json.dumps({
         "type": "state",
         "state": session.state,
@@ -279,15 +265,6 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 async def handle_client_message(msg: dict):
-    """
-    Processa comandos enviados pelo browser via WebSocket.
-
-    Comandos:
-        { "action": "start_session" }
-        { "action": "stop_session" }
-        { "action": "clear_session" }
-        { "action": "restart_session" }
-    """
     action = msg.get("action")
     logger.info(f"Comando recebido: {action}")
 
@@ -319,7 +296,18 @@ async def handle_client_message(msg: dict):
 @app.on_event("startup")
 async def startup():
     logger.info("Servidor iniciado. Acesse http://localhost:8000")
-    await session.start()
+    # ── CORREÇÃO DO LOOP INFINITO ──────────────────────────────────────────
+    # NÃO iniciar a sessão automaticamente no startup.
+    #
+    # O problema: session.start() abre o Chromium com headless=False, que no
+    # Windows (PyInstaller) cria subprocessos que re-executam o .exe principal.
+    # Isso relança o uvicorn, que chama startup(), que chama session.start(),
+    # que abre outro Chromium... em loop infinito.
+    #
+    # A sessão agora é iniciada APENAS pelo frontend via WebSocket:
+    #   { "action": "start_session" }
+    # O frontend envia esse comando assim que recebe o estado "idle" na conexão.
+    # ──────────────────────────────────────────────────────────────────────
 
 
 @app.on_event("shutdown")
