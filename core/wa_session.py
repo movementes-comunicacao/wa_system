@@ -15,6 +15,7 @@ import csv
 import io
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -28,7 +29,11 @@ logger = logging.getLogger(__name__)
 # Caminhos de dados
 # ---------------------------------------------------------------------------
 
-BASE_DIR = Path(__file__).parent.parent
+import sys as _sys
+if hasattr(_sys, "_MEIPASS"):
+    BASE_DIR = Path(_sys.executable).parent
+else:
+    BASE_DIR = Path(__file__).parent.parent
 SESSION_DIR = BASE_DIR / "data" / "session"
 EXPORTS_DIR = BASE_DIR / "data" / "exports"
 LOGS_DIR = BASE_DIR / "data" / "logs"
@@ -163,20 +168,42 @@ class WASession:
             pass
 
     async def _open_browser(self):
+        import sys
         logger.info("[WASession] Abrindo Playwright + Chromium persistente...")
         self._playwright = await async_playwright().start()
 
-        self._context = await self._playwright.chromium.launch_persistent_context(
-            str(SESSION_DIR),
-            headless=False,          # Windows: headless=True quebra WebGL/canvas do WA
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                # "--window-position=-32000,-32000",  # janela fora da tela (invisível)
-                # "--window-size=1280,800",
-                "--disable-extensions",
-                "--mute-audio",
-            ],
+        # headless=False é necessário no Windows para o canvas do QR funcionar.
+        # Em Linux sem display (WSL, servidor), força headless=True automaticamente.
+        is_windows = sys.platform.startswith("win")
+        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        use_headless = not is_windows and not has_display
+        logger.info(f"[WASession] headless={use_headless} (windows={is_windows}, display={has_display})")
+
+        args = [
+            "--no-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-extensions",
+            "--mute-audio",
+        ]
+        if use_headless:
+            args += [
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-software-rasterizer",
+            ]
+
+        # Localiza o executável do Chromium explicitamente.
+        # Isso é necessário no PyInstaller onde PLAYWRIGHT_BROWSERS_PATH pode
+        # não ser lido corretamente pelo driver interno do Playwright.
+        executable_path = self._find_chromium_executable()
+        if executable_path:
+            logger.info(f"[WASession] Usando Chromium em: {executable_path}")
+        else:
+            logger.warning("[WASession] Chromium não encontrado explicitamente — usando path padrão do Playwright.")
+
+        launch_kwargs = dict(
+            headless=use_headless,
+            args=args,
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -185,7 +212,57 @@ class WASession:
             viewport={"width": 1280, "height": 800},
             timeout=30_000,
         )
+        if executable_path:
+            launch_kwargs["executable_path"] = executable_path
+
+        self._context = await self._playwright.chromium.launch_persistent_context(
+            str(SESSION_DIR),
+            **launch_kwargs,
+        )
         logger.info("[WASession] Chromium aberto.")
+
+    def _find_chromium_executable(self) -> Optional[str]:
+        """
+        Localiza o executável do Chromium na pasta de browsers configurada.
+        Necessário para funcionar corretamente dentro de um .exe PyInstaller.
+        """
+        import sys
+        import glob
+
+        # Determina a pasta base dos navegadores
+        browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+
+        # Se não definido, tenta inferir a partir do executável atual
+        if not browsers_path:
+            if hasattr(sys, '_MEIPASS'):
+                base = os.path.dirname(sys.executable)
+            else:
+                base = str(BASE_DIR)
+            browsers_path = os.path.join(base, "navegadores_playwright")
+
+        logger.info(f"[WASession] Procurando Chromium em: {browsers_path}")
+
+        if not os.path.exists(browsers_path):
+            logger.warning(f"[WASession] Pasta de browsers não existe: {browsers_path}")
+            return None
+
+        # Padrões de caminho do Chromium em diferentes versões/plataformas
+        patterns = [
+            os.path.join(browsers_path, "chromium-*", "chrome-win64", "chrome.exe"),
+            os.path.join(browsers_path, "chromium-*", "chrome-win", "chrome.exe"),
+            os.path.join(browsers_path, "chromium-*", "chrome-linux", "chrome"),
+            os.path.join(browsers_path, "chromium-*", "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium"),
+        ]
+
+        for pattern in patterns:
+            matches = glob.glob(pattern)
+            if matches:
+                exe = matches[0]
+                logger.info(f"[WASession] Chromium encontrado: {exe}")
+                return exe
+
+        logger.warning(f"[WASession] Nenhum executável Chromium encontrado em: {browsers_path}")
+        return None
 
     async def _load_whatsapp(self):
         pages = self._context.pages
@@ -272,6 +349,10 @@ class WASession:
         attempt = 0
         stuck_checked = False
 
+        # Emite qr_ready imediatamente para o frontend mostrar o spinner "aguardando QR"
+        # O QR em si chegará assim que o canvas for capturado
+        await self._emit_state("qr_ready")
+
         while True:
             attempt += 1
             # ── Verificar se já está autenticado ──────────────────────
@@ -281,24 +362,26 @@ class WASession:
                 return
 
             # ── Detectar sessão travada no loading e forçar logout ────
-            if not stuck_checked and attempt >= 5:
+            if not stuck_checked and attempt >= 3:
                 stuck_checked = True
                 if await self._force_logout_if_stuck():
-                    # Reseta deadline após desconectar
                     deadline = time.time() + QR_TIMEOUT
+                    # Aguarda um pouco mais para o QR renderizar após logout
+                    await asyncio.sleep(4)
                     continue
 
             # ── Capturar QR ───────────────────────────────────────────
             qr_b64 = await self._capture_qr()
             if qr_b64:
-                if not qr_sent:
-                    await self._emit_state("qr_ready")
-                    qr_sent = True
+                qr_sent = True
                 if qr_b64 != self.qr_base64:
                     await self._emit_qr(qr_b64)
                     logger.info("[WASession] QR Code atualizado.")
             else:
                 logger.info(f"[WASession] Tentativa {attempt}: QR não encontrado ainda — aguardando...")
+                # A cada 5 tentativas sem QR, tira screenshot e envia ao frontend como fallback
+                if attempt % 5 == 0:
+                    await self._send_debug_screenshot()
 
             # ── Timeout ───────────────────────────────────────────────
             if time.time() > deadline:
@@ -306,8 +389,11 @@ class WASession:
                     ss = await self._page.screenshot()
                     ss_path = LOGS_DIR / "debug_timeout.png"
                     ss_path.write_bytes(ss)
+                    ss_b64 = base64.b64encode(ss).decode()
                     logger.error(f"[WASession] Screenshot de debug salvo em {ss_path}")
                     logger.error(f"[WASession] URL atual: {self._page.url}")
+                    # Envia screenshot ao frontend para diagnóstico visual
+                    await self._emit_qr(ss_b64)
                 except Exception as dbg_e:
                     logger.error(f"[WASession] Erro ao capturar debug: {dbg_e}")
                 raise TimeoutError(f"QR não escaneado em {QR_TIMEOUT}s.")
@@ -340,31 +426,75 @@ class WASession:
                 canvas = await self._page.query_selector(sel)
                 if canvas:
                     qr_b64 = await self._page.evaluate(
-                        """(s) => { const c = document.querySelector(s);
+                        """(s) => {
+                           const c = document.querySelector(s);
                            if(!c) return null;
-                           try { return c.toDataURL('image/png').split(',')[1]; } catch(e) { return null; }
+                           try {
+                               const data = c.toDataURL('image/png').split(',')[1];
+                               return data;
+                           } catch(e) {
+                               // Canvas pode estar tainted (CORS). Retorna erro codificado.
+                               return '__tainted__:' + e.message;
+                           }
                         }""", sel)
+                    if qr_b64 and qr_b64.startswith('__tainted__'):
+                        logger.warning(f"[WASession] Canvas tainted (CORS): {qr_b64}. Usando screenshot como fallback.")
+                        return await self._screenshot_qr_region(canvas)
                     if qr_b64 and len(qr_b64) > 500:
                         return qr_b64
 
             # Fallback: pega qualquer canvas quadrado com tamanho de QR (>=200px)
             qr_b64 = await self._page.evaluate("""() => {
                 const canvases = [...document.querySelectorAll('canvas')];
-                // Prefere canvas com aria-label de QR
                 const qrCanvas = canvases.find(c => {
                     const a = (c.getAttribute('aria-label') || '').toLowerCase();
                     return a.includes('qr') || a.includes('scan') || a.includes('code');
                 }) || canvases.find(c => c.width >= 200 && c.height >= 200 && Math.abs(c.width - c.height) < 20);
                 if (!qrCanvas) return null;
-                try { return qrCanvas.toDataURL('image/png').split(',')[1]; } catch(e) { return null; }
+                try {
+                    return qrCanvas.toDataURL('image/png').split(',')[1];
+                } catch(e) {
+                    return '__tainted__:' + qrCanvas.getAttribute('aria-label');
+                }
             }""")
+            if qr_b64 and qr_b64.startswith('__tainted__'):
+                logger.warning(f"[WASession] Canvas fallback tainted: {qr_b64}. Usando screenshot da região.")
+                # Tenta screenshot da região do QR via Playwright (não sofre de CORS)
+                for sel in (SEL_QR_CANVAS, SEL_QR_CANVAS_2):
+                    canvas = await self._page.query_selector(sel)
+                    if canvas:
+                        return await self._screenshot_qr_region(canvas)
+                return None
             if qr_b64 and len(qr_b64) > 500:
                 logger.info("[WASession] QR capturado via fallback (canvas genérico).")
                 return qr_b64
 
         except Exception as e:
-            logger.debug(f"[WASession] _capture_qr erro: {e}")
+            logger.warning(f"[WASession] _capture_qr erro: {e}")
         return None
+
+    async def _screenshot_qr_region(self, canvas_element) -> Optional[str]:
+        """Captura screenshot do elemento canvas via Playwright (bypass CORS/taint)."""
+        try:
+            ss = await canvas_element.screenshot()
+            b64 = base64.b64encode(ss).decode()
+            if len(b64) > 500:
+                logger.info("[WASession] QR capturado via screenshot de elemento (bypass CORS).")
+                return b64
+        except Exception as e:
+            logger.warning(f"[WASession] _screenshot_qr_region erro: {e}")
+        return None
+
+    async def _send_debug_screenshot(self):
+        """Tira screenshot da página inteira e envia ao frontend para diagnóstico."""
+        try:
+            ss = await self._page.screenshot()
+            b64 = base64.b64encode(ss).decode()
+            logger.info("[WASession] Enviando screenshot de diagnóstico ao frontend.")
+            # Envia como QR temporário para o frontend mostrar o que o browser está vendo
+            await self._emit_qr(b64)
+        except Exception as e:
+            logger.debug(f"[WASession] _send_debug_screenshot erro: {e}")
 
     async def _on_authenticated(self):
         await self._emit_state("connecting")

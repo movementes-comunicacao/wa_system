@@ -20,7 +20,7 @@ async def main():
 
         # Testa primeiro SEM persistent context (mais simples)
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
             timeout=20_000,
         )
