@@ -714,7 +714,7 @@ function handleState(msg) {
 
   const s = states[state] || { dot: '', txt: state };
   if (s.dot) dot.classList.add(s.dot);
-  txt.classList.add(s.dot || '');
+  if (s.dot) txt.classList.add(s.dot);
   txt.textContent = s.txt;
 
   const hint = document.getElementById('qrHint');
@@ -753,17 +753,15 @@ function handleState(msg) {
     authEl.classList.remove('hiding');
     appEl.classList.add('hidden');
     resetQRFrame();
-    if (browserVisibilityChoice === null) {
-      modeEl.classList.remove('hidden');
-      authEl.classList.add('hidden');
-    } else {
-      modeEl.classList.add('hidden');
-      authEl.classList.remove('hidden');
+
+    // ── AUTO-START ────────────────────────────────────────────────────────
+    // O servidor não inicia a sessão automaticamente (evita loop no PyInstaller).
+    // O frontend inicia ao receber "idle" pela primeira vez no WebSocket.
+    // "stopped" NÃO reinicia — o usuário desconectou manualmente.
+    if (state === 'idle') {
+      setTimeout(() => sendCmd('start_session'), 500);
     }
-  } else if (state !== 'connected') {
-    modeEl.classList.add('hidden');
-    authEl.classList.remove('hidden');
-    authEl.style.display = '';
+    // ─────────────────────────────────────────────────────────────────────
   }
 }
 
