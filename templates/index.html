@@ -775,9 +775,6 @@ function handleState(msg) {
     // O servidor não inicia a sessão automaticamente (evita loop no PyInstaller).
     // O frontend inicia ao receber "idle" pela primeira vez no WebSocket.
     // "stopped" NÃO reinicia — o usuário desconectou manualmente.
-    if (state === 'idle') {
-      setTimeout(() => sendCmd('start_session'), 500);
-    }
     // ─────────────────────────────────────────────────────────────────────
   }
 }
