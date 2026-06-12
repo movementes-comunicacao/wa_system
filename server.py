@@ -8,6 +8,7 @@ Servidor FastAPI que:
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import logging
 import os
@@ -27,11 +28,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Startup / Shutdown
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Servidor iniciado. Acesse http://localhost:8000")
+    yield
+    logger.info("Servidor desligando...")
+    await session.stop()
+
+
 # ---------------------------------------------------------------------------
 # App & estado global
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="WA_SYSTEM")
+app = FastAPI(title="WA_SYSTEM", lifespan=lifespan)
 session = WASession()
 connected_clients: Set[WebSocket] = set()
 
@@ -63,7 +77,7 @@ async def broadcast(payload: dict):
 # ---------------------------------------------------------------------------
 
 async def on_state_change(state: str):
-    payload = {"type": "state", "state": state}
+    payload = {"type": "state", "state": state, "show_browser": session.show_browser}
     if state == "connected" and session.phone_number:
         payload["phone"] = session.phone_number
     await broadcast(payload)
@@ -245,6 +259,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.send_text(json.dumps({
         "type": "state",
         "state": session.state,
+        "show_browser": session.show_browser,
     }))
     if session.qr_base64:
         await ws.send_text(json.dumps({
@@ -265,10 +280,22 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 async def handle_client_message(msg: dict):
+    """
+    Processa comandos enviados pelo browser via WebSocket.
+
+    Comandos:
+        { "action": "start_session", "show_browser": true|false }
+        { "action": "stop_session" }
+        { "action": "clear_session" }
+        { "action": "restart_session", "show_browser": true|false }
+    """
     action = msg.get("action")
     logger.info(f"Comando recebido: {action}")
+    show_browser = msg.get("show_browser")
 
     if action == "start_session":
+        if isinstance(show_browser, bool):
+            session.set_browser_visibility(show_browser)
         await session.start()
 
     elif action == "stop_session":
@@ -279,9 +306,11 @@ async def handle_client_message(msg: dict):
         await session.clear_session()
         session.state = "idle"
         session.qr_base64 = None
-        await broadcast({"type": "state", "state": "idle"})
+        await broadcast({"type": "state", "state": "idle", "show_browser": session.show_browser})
 
     elif action == "restart_session":
+        if isinstance(show_browser, bool):
+            session.set_browser_visibility(show_browser)
         await session.stop()
         await session.start()
 

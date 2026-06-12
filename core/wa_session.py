@@ -82,6 +82,7 @@ class WASession:
         self.qr_base64: Optional[str] = None
         self.phone_number: Optional[str] = None
         self.error_msg: Optional[str] = None
+        self.show_browser: bool = False
 
         self._playwright: Optional[Playwright] = None
         self._context: Optional[BrowserContext] = None
@@ -100,6 +101,10 @@ class WASession:
 
     def on_qr(self, cb: Callable):
         self._on_qr = cb
+
+    def set_browser_visibility(self, show_browser: bool):
+        self.show_browser = bool(show_browser)
+        logger.info(f"[WASession] Modo de browser visível: {self.show_browser}")
 
     async def _emit_state(self, state: str):
         self.state = state
@@ -172,38 +177,17 @@ class WASession:
         logger.info("[WASession] Abrindo Playwright + Chromium persistente...")
         self._playwright = await async_playwright().start()
 
-        # headless=False é necessário no Windows para o canvas do QR funcionar.
-        # Em Linux sem display (WSL, servidor), força headless=True automaticamente.
-        is_windows = sys.platform.startswith("win")
-        has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-        use_headless = not is_windows and not has_display
-        logger.info(f"[WASession] headless={use_headless} (windows={is_windows}, display={has_display})")
-
-        args = [
-            "--no-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-extensions",
-            "--mute-audio",
-        ]
-        if use_headless:
-            args += [
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--disable-software-rasterizer",
-            ]
-
-        # Localiza o executável do Chromium explicitamente.
-        # Isso é necessário no PyInstaller onde PLAYWRIGHT_BROWSERS_PATH pode
-        # não ser lido corretamente pelo driver interno do Playwright.
-        executable_path = self._find_chromium_executable()
-        if executable_path:
-            logger.info(f"[WASession] Usando Chromium em: {executable_path}")
-        else:
-            logger.warning("[WASession] Chromium não encontrado explicitamente — usando path padrão do Playwright.")
-
-        launch_kwargs = dict(
-            headless=use_headless,
-            args=args,
+        self._context = await self._playwright.chromium.launch_persistent_context(
+            str(SESSION_DIR),
+            headless=not self.show_browser,
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                # "--window-position=-32000,-32000",  # janela fora da tela (invisível)
+                # "--window-size=1280,800",
+                "--disable-extensions",
+                "--mute-audio",
+            ],
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
