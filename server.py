@@ -319,32 +319,6 @@ async def handle_client_message(msg: dict):
 
 
 # ---------------------------------------------------------------------------
-# Startup / Shutdown
-# ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def startup():
-    logger.info("Servidor iniciado. Acesse http://localhost:8000")
-    # ── CORREÇÃO DO LOOP INFINITO ──────────────────────────────────────────
-    # NÃO iniciar a sessão automaticamente no startup.
-    #
-    # O problema: session.start() abre o Chromium com headless=False, que no
-    # Windows (PyInstaller) cria subprocessos que re-executam o .exe principal.
-    # Isso relança o uvicorn, que chama startup(), que chama session.start(),
-    # que abre outro Chromium... em loop infinito.
-    #
-    # A sessão agora é iniciada APENAS pelo frontend via WebSocket:
-    #   { "action": "start_session" }
-    # O frontend envia esse comando assim que recebe o estado "idle" na conexão.
-    # ──────────────────────────────────────────────────────────────────────
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await session.stop()
-
-
-# ---------------------------------------------------------------------------
 # Ponto de entrada
 # ---------------------------------------------------------------------------
 

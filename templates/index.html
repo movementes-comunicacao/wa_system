@@ -660,6 +660,23 @@ function selectBrowserMode(showBrowser) {
   }
 }
 
+function selectBrowserMode(showBrowser) {
+  browserVisibilityChoice = !!showBrowser;
+  const modeEl = document.getElementById('mode-screen');
+  const authEl = document.getElementById('auth-screen');
+  modeEl.classList.add('hidden');
+  authEl.classList.remove('hidden');
+  authEl.style.display = '';
+  authEl.classList.remove('hiding');
+  resetQRFrame();
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    sendCmd('start_session', { show_browser: browserVisibilityChoice });
+  } else {
+    pendingStartMode = browserVisibilityChoice;
+  }
+}
+
 function restartSession() {
   const payload = typeof browserVisibilityChoice === 'boolean'
     ? { show_browser: browserVisibilityChoice }

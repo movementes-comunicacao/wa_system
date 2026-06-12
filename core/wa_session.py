@@ -177,18 +177,37 @@ class WASession:
         logger.info("[WASession] Abrindo Playwright + Chromium persistente...")
         self._playwright = await async_playwright().start()
 
-        self._context = await self._playwright.chromium.launch_persistent_context(
-            str(SESSION_DIR),
-            headless=not self.show_browser,
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                # "--window-position=-32000,-32000",  # janela fora da tela (invisível)
-                # "--window-size=1280,800",
-                "--disable-extensions",
-                "--mute-audio",
-            ],
-            user_agent=(
+        # headless=False é necessário no Windows para o canvas do QR funcionar.
+        # Em Linux sem display (WSL, servidor), força headless=True automaticamente.
+        is_windows = sys.platform.startswith("win")
+        use_headless = not self.show_browser
+        logger.info(f"[WASession] headless={use_headless} ")
+        args = [
+            "--no-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-extensions",
+            "--mute-audio",
+        ]
+        if use_headless:
+            args += [
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-software-rasterizer",
+            ]
+
+        # Localiza o executável do Chromium explicitamente.
+        # Isso é necessário no PyInstaller onde PLAYWRIGHT_BROWSERS_PATH pode
+        # não ser lido corretamente pelo driver interno do Playwright.
+        executable_path = self._find_chromium_executable()
+        if executable_path:
+            logger.info(f"[WASession] Usando Chromium em: {executable_path}")
+        else:
+            logger.warning("[WASession] Chromium não encontrado explicitamente — usando path padrão do Playwright.")
+
+        launch_kwargs = dict(
+            headless=use_headless,
+            args=args,
+              user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
@@ -198,7 +217,6 @@ class WASession:
         )
         if executable_path:
             launch_kwargs["executable_path"] = executable_path
-
         self._context = await self._playwright.chromium.launch_persistent_context(
             str(SESSION_DIR),
             **launch_kwargs,
